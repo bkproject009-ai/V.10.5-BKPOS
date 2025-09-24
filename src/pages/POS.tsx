@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 const POS = () => {
-  const { state, addToCart, updateCartItem, removeFromCart, clearCart, completeSale } = usePOS();
+  const { state, addToCart, updateCartItem, removeFromCart, clearCart, completeSale, calculateTotals } = usePOS();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -39,10 +39,8 @@ const POS = () => {
   // Get unique categories
   const categories = ['all', ...new Set(state.products.map(p => p.category))];
 
-  // Calculate totals
-  const subtotal = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const tax = subtotal * 0.08; // 8% tax
-  const total = subtotal + tax;
+  // Calculate totals using the context method
+  const { subtotal, taxAmount, total } = calculateTotals();
 
   const handleAddToCart = (productId: string) => {
     const product = state.products.find(p => p.id === productId);
@@ -232,10 +230,12 @@ const POS = () => {
                 <span>Subtotal</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Tax (8%)</span>
-                <span>${tax.toFixed(2)}</span>
-              </div>
+              {state.taxSettings.enabled && (
+                <div className="flex justify-between text-sm">
+                  <span>{state.taxSettings.name} ({state.taxSettings.rate}%)</span>
+                  <span>${taxAmount.toFixed(2)}</span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
@@ -264,10 +264,12 @@ const POS = () => {
                 <span>Subtotal:</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between mb-2">
-                <span>Tax:</span>
-                <span>${tax.toFixed(2)}</span>
-              </div>
+              {state.taxSettings.enabled && (
+                <div className="flex justify-between mb-2">
+                  <span>{state.taxSettings.name}:</span>
+                  <span>${taxAmount.toFixed(2)}</span>
+                </div>
+              )}
               <Separator className="my-2" />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total:</span>

@@ -20,15 +20,24 @@ export interface CartItem {
 export interface Sale {
   id: string;
   items: CartItem[];
+  subtotal: number;
+  taxAmount: number;
   total: number;
   date: Date;
   paymentMethod: 'cash' | 'card';
+}
+
+export interface TaxSettings {
+  enabled: boolean;
+  rate: number; // percentage (e.g., 8.5 for 8.5%)
+  name: string; // e.g., "Sales Tax", "VAT", etc.
 }
 
 interface POSState {
   products: Product[];
   cart: CartItem[];
   sales: Sale[];
+  taxSettings: TaxSettings;
 }
 
 type POSAction =
@@ -39,7 +48,10 @@ type POSAction =
   | { type: 'UPDATE_CART_ITEM'; productId: string; quantity: number }
   | { type: 'REMOVE_FROM_CART'; productId: string }
   | { type: 'CLEAR_CART' }
-  | { type: 'COMPLETE_SALE'; paymentMethod: 'cash' | 'card' };
+  | { type: 'COMPLETE_SALE'; paymentMethod: 'cash' | 'card' }
+  | { type: 'UPDATE_TAX_SETTINGS'; taxSettings: TaxSettings }
+  | { type: 'UPDATE_SALE'; id: string; sale: Partial<Sale> }
+  | { type: 'DELETE_SALE'; id: string };
 
 // Sample seed data
 const initialProducts: Product[] = [
@@ -93,7 +105,12 @@ const initialProducts: Product[] = [
 const initialState: POSState = {
   products: initialProducts,
   cart: [],
-  sales: []
+  sales: [],
+  taxSettings: {
+    enabled: true,
+    rate: 8.5,
+    name: 'Sales Tax'
+  }
 };
 
 const posReducer = (state: POSState, action: POSAction): POSState => {
@@ -198,10 +215,15 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       };
 
     case 'COMPLETE_SALE': {
-      const total = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+      const subtotal = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+      const taxAmount = state.taxSettings.enabled ? (subtotal * state.taxSettings.rate) / 100 : 0;
+      const total = subtotal + taxAmount;
+      
       const sale: Sale = {
         id: Date.now().toString(),
         items: [...state.cart],
+        subtotal,
+        taxAmount,
         total,
         date: new Date(),
         paymentMethod: action.paymentMethod
@@ -224,6 +246,26 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       };
     }
 
+    case 'UPDATE_TAX_SETTINGS':
+      return {
+        ...state,
+        taxSettings: action.taxSettings
+      };
+
+    case 'UPDATE_SALE':
+      return {
+        ...state,
+        sales: state.sales.map(sale =>
+          sale.id === action.id ? { ...sale, ...action.sale } : sale
+        )
+      };
+
+    case 'DELETE_SALE':
+      return {
+        ...state,
+        sales: state.sales.filter(sale => sale.id !== action.id)
+      };
+
     default:
       return state;
   }
@@ -239,6 +281,10 @@ interface POSContextType {
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
   completeSale: (paymentMethod: 'cash' | 'card') => void;
+  updateTaxSettings: (taxSettings: TaxSettings) => void;
+  updateSale: (id: string, sale: Partial<Sale>) => void;
+  deleteSale: (id: string) => void;
+  calculateTotals: () => { subtotal: number; taxAmount: number; total: number };
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -287,6 +333,37 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const updateTaxSettings = (taxSettings: TaxSettings) => {
+    dispatch({ type: 'UPDATE_TAX_SETTINGS', taxSettings });
+    toast({
+      title: "Tax Settings Updated",
+      description: "Tax configuration has been saved",
+    });
+  };
+
+  const updateSale = (id: string, sale: Partial<Sale>) => {
+    dispatch({ type: 'UPDATE_SALE', id, sale });
+    toast({
+      title: "Sale Updated",
+      description: "Sale record has been modified",
+    });
+  };
+
+  const deleteSale = (id: string) => {
+    dispatch({ type: 'DELETE_SALE', id });
+    toast({
+      title: "Sale Deleted",
+      description: "Sale record has been removed",
+    });
+  };
+
+  const calculateTotals = () => {
+    const subtotal = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+    const taxAmount = state.taxSettings.enabled ? (subtotal * state.taxSettings.rate) / 100 : 0;
+    const total = subtotal + taxAmount;
+    return { subtotal, taxAmount, total };
+  };
+
   const contextValue: POSContextType = {
     state,
     addProduct,
@@ -296,7 +373,11 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
-    completeSale
+    completeSale,
+    updateTaxSettings,
+    updateSale,
+    deleteSale,
+    calculateTotals
   };
 
   return (

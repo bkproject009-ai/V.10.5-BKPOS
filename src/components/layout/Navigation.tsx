@@ -5,6 +5,7 @@ import {
   Package, 
   ShoppingCart, 
   BarChart3,
+  Settings,
   Store
 } from 'lucide-react';
 
@@ -31,6 +32,11 @@ const Navigation = () => {
       path: '/reports',
       label: 'Reports',
       icon: BarChart3
+    },
+    {
+      path: '/settings',
+      label: 'Settings',
+      icon: Settings
     }
   ];
 
