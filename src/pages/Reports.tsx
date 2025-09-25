@@ -21,10 +21,57 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { useState } from 'react';
 
+// Custom Report type
+type CustomReport = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+// Initial custom reports state
+const initialCustomReports: CustomReport[] = [];
+
 const Reports = () => {
+  // Fallback modal state
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvContent, setCsvContent] = useState('');
   const { state, updateSale, deleteSale } = usePOS();
   const [selectedSale, setSelectedSale] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // Custom Reports CRUD state
+  const [customReports, setCustomReports] = useState<CustomReport[]>(initialCustomReports);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [editingReport, setEditingReport] = useState<CustomReport | null>(null);
+  const [reportForm, setReportForm] = useState({ name: '', description: '' });
+
+  // Create or update report
+  const handleSaveReport = () => {
+    if (!reportForm.name.trim()) return toast({ title: 'Nama laporan wajib diisi', variant: 'destructive' });
+    if (editingReport) {
+      setCustomReports(reports => reports.map(r => r.id === editingReport.id ? { ...r, ...reportForm } : r));
+      toast({ title: 'Laporan diperbarui', description: 'Laporan berhasil diperbarui.' });
+    } else {
+      setCustomReports(reports => [...reports, { id: Date.now().toString(), ...reportForm }]);
+      toast({ title: 'Laporan ditambahkan', description: 'Laporan baru berhasil dibuat.' });
+    }
+    setIsReportDialogOpen(false);
+    setEditingReport(null);
+    setReportForm({ name: '', description: '' });
+  };
+
+  // Edit report
+  const handleEditReport = (report: CustomReport) => {
+    setEditingReport(report);
+    setReportForm({ name: report.name, description: report.description });
+    setIsReportDialogOpen(true);
+  };
+
+  // Delete report
+  const handleDeleteReport = (id: string) => {
+    setCustomReports(reports => reports.filter(r => r.id !== id));
+    toast({ title: 'Laporan dihapus', description: 'Laporan berhasil dihapus.' });
+  };
 
   // Calculate analytics
   const totalRevenue = state.sales.reduce((sum, sale) => sum + sale.total, 0);
@@ -54,9 +101,10 @@ const Reports = () => {
 
   // Sales by payment method
   const cashSales = state.sales.filter(sale => sale.paymentMethod === 'cash');
+  const qrisSales = state.sales.filter(sale => sale.paymentMethod === 'qris');
   const cardSales = state.sales.filter(sale => sale.paymentMethod === 'card');
   const cashRevenue = cashSales.reduce((sum, sale) => sum + sale.total, 0);
-  const cardRevenue = cardSales.reduce((sum, sale) => sum + sale.total, 0);
+  const qrisRevenue = qrisSales.reduce((sum, sale) => sum + sale.total, 0);
 
   // Export functions
   const exportToCSV = (data: any[], filename: string) => {
@@ -75,35 +123,61 @@ const Reports = () => {
         typeof value === 'string' ? `"${value}"` : value
       ).join(',')
     );
-    
-    const csvContent = [headers, ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${filename}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const csv = [headers, ...rows].join('\n');
 
-    toast({
-      title: "Export Successful",
-      description: `${filename}.csv has been downloaded`,
-    });
+    try {
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filename}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Export Successful",
+        description: `${filename}.csv has been downloaded`,
+      });
+    } catch (err) {
+      setCsvContent(csv);
+      setCsvModalOpen(true);
+      toast({
+        title: "Download failed",
+        description: "Copy the CSV manually from the modal.",
+        variant: "destructive"
+      });
+    }
+  {/* CSV Fallback Modal */}
+  <Dialog open={csvModalOpen} onOpenChange={setCsvModalOpen}>
+    <DialogContent className="max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Salin Data CSV Manual</DialogTitle>
+      </DialogHeader>
+      <div className="mb-2 text-sm text-muted-foreground">Download gagal. Salin data di bawah ini secara manual:</div>
+      <textarea
+        value={csvContent}
+        readOnly
+        className="w-full h-64 p-2 border rounded bg-muted text-xs font-mono"
+        style={{ resize: 'vertical' }}
+      />
+      <div className="flex justify-end pt-2">
+        <Button variant="outline" onClick={() => setCsvModalOpen(false)}>Tutup</Button>
+      </div>
+    </DialogContent>
+  </Dialog>
   };
 
   const exportSalesReport = () => {
     const salesData = state.sales.map(sale => ({
-      'Transaction ID': sale.id,
-      'Date': sale.date.toLocaleDateString(),
-      'Time': sale.date.toLocaleTimeString(),
-      'Items Count': sale.items.length,
-      'Subtotal': sale.subtotal?.toFixed(2) || (sale.total - (sale.taxAmount || 0)).toFixed(2),
-      'Tax Amount': sale.taxAmount?.toFixed(2) || '0.00',
-      'Total Amount': sale.total.toFixed(2),
-      'Payment Method': sale.paymentMethod,
+      'ID Transaksi': sale.id,
+      'Tanggal': sale.date.toLocaleDateString('id-ID'),
+      'Waktu': sale.date.toLocaleTimeString('id-ID'),
+      'Jumlah Item': sale.items.length,
+      'Subtotal': sale.subtotal?.toLocaleString('id-ID') || (sale.total - (sale.taxAmount || 0)).toLocaleString('id-ID'),
+      'Jumlah Pajak': sale.taxAmount?.toLocaleString('id-ID') || '0',
+      'Total': sale.total.toLocaleString('id-ID'),
+      'Tipe Transaksi': sale.paymentMethod === 'cash' ? 'Tunai' : sale.paymentMethod === 'qris' ? 'QRIS' : sale.paymentMethod,
       'Items': sale.items.map(item => `${item.product.name} (${item.quantity})`).join('; ')
     }));
     
@@ -157,8 +231,8 @@ const Reports = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Reports & Analytics</h1>
-          <p className="text-muted-foreground">Sales performance and inventory insights</p>
+          <h1 className="text-3xl font-bold text-foreground">Laporan & Analitik</h1>
+          <p className="text-muted-foreground">Kinerja penjualan dan wawasan inventaris</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -167,7 +241,7 @@ const Reports = () => {
             disabled={state.sales.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
-            Sales Report
+            Laporan Penjualan
           </Button>
           <Button
             variant="outline"
@@ -175,7 +249,7 @@ const Reports = () => {
             disabled={state.products.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
-            Product Report
+            Laporan Produk
           </Button>
           <Button
             variant="outline"
@@ -183,9 +257,80 @@ const Reports = () => {
             disabled={state.products.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
-            Inventory Report
+            Laporan Inventaris
           </Button>
         </div>
+      </div>
+
+      {/* Financial Reports Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Laporan Laba Rugi</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-2">Ringkasan pendapatan dan beban usaha.</p>
+            {/* Example: You can add more detailed breakdown here */}
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>Pendapatan</span>
+                <span>Rp{totalRevenue.toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Beban Usaha</span>
+                <span>Rp0</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Laba Bersih</span>
+                <span>Rp{totalRevenue.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Laporan Arus Kas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-2">Ringkasan arus kas masuk dan keluar.</p>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>Kas Masuk</span>
+                <span>Rp{totalRevenue.toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Kas Keluar</span>
+                <span>Rp0</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Saldo Kas</span>
+                <span>Rp{totalRevenue.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Laporan Neraca</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-2">Ringkasan aset, kewajiban, dan ekuitas.</p>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>Aset</span>
+                <span>Rp{totalRevenue.toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Kewajiban</span>
+                <span>Rp0</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Ekuitas</span>
+                <span>Rp{totalRevenue.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Key Metrics */}
@@ -194,8 +339,8 @@ const Reports = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold text-foreground">${totalRevenue.toFixed(2)}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Pendapatan</p>
+                <p className="text-2xl font-bold text-foreground">Rp{totalRevenue.toLocaleString('id-ID')}</p>
               </div>
               <div className="bg-success/10 p-3 rounded-full">
                 <DollarSign className="h-6 w-6 text-success" />
@@ -208,7 +353,7 @@ const Reports = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Transactions</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Transaksi</p>
                 <p className="text-2xl font-bold text-foreground">{totalTransactions}</p>
               </div>
               <div className="bg-primary/10 p-3 rounded-full">
@@ -222,7 +367,7 @@ const Reports = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Items Sold</p>
+                <p className="text-sm font-medium text-muted-foreground">Produk Terjual</p>
                 <p className="text-2xl font-bold text-foreground">{totalItemsSold}</p>
               </div>
               <div className="bg-warning/10 p-3 rounded-full">
@@ -236,9 +381,9 @@ const Reports = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Order Value</p>
+                <p className="text-sm font-medium text-muted-foreground">Rata-rata Nilai Pesanan</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${totalTransactions > 0 ? (totalRevenue / totalTransactions).toFixed(2) : '0.00'}
+                  Rp{totalTransactions > 0 ? (totalRevenue / totalTransactions).toLocaleString('id-ID') : '0'}
                 </p>
               </div>
               <div className="bg-accent/10 p-3 rounded-full">
@@ -253,20 +398,20 @@ const Reports = () => {
         {/* Payment Methods */}
         <Card>
           <CardHeader>
-            <CardTitle>Sales by Payment Method</CardTitle>
+            <CardTitle>Penjualan Berdasarkan Metode Pembayaran</CardTitle>
           </CardHeader>
           <CardContent>
             {totalTransactions === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No sales data available</p>
+              <p className="text-muted-foreground text-center py-8">Data penjualan tidak tersedia</p>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                   <div>
-                    <p className="font-medium">Cash Payments</p>
-                    <p className="text-sm text-muted-foreground">{cashSales.length} transactions</p>
+                    <p className="font-medium">Pembayaran Tunai</p>
+                    <p className="text-sm text-muted-foreground">{cashSales.length} transaksi</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold">${cashRevenue.toFixed(2)}</p>
+                    <p className="font-bold">Rp{cashRevenue.toLocaleString('id-ID')}</p>
                     <p className="text-sm text-muted-foreground">
                       {totalRevenue > 0 ? ((cashRevenue / totalRevenue) * 100).toFixed(1) : 0}%
                     </p>
@@ -275,13 +420,13 @@ const Reports = () => {
                 
                 <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                   <div>
-                    <p className="font-medium">Card Payments</p>
-                    <p className="text-sm text-muted-foreground">{cardSales.length} transactions</p>
+                    <p className="font-medium">Pembayaran QRIS</p>
+                    <p className="text-sm text-muted-foreground">{qrisSales.length} transaksi</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold">${cardRevenue.toFixed(2)}</p>
+                    <p className="font-bold">Rp{qrisRevenue.toLocaleString('id-ID')}</p>
                     <p className="text-sm text-muted-foreground">
-                      {totalRevenue > 0 ? ((cardRevenue / totalRevenue) * 100).toFixed(1) : 0}%
+                      {totalRevenue > 0 ? ((qrisRevenue / totalRevenue) * 100).toFixed(1) : 0}%
                     </p>
                   </div>
                 </div>
@@ -293,11 +438,11 @@ const Reports = () => {
         {/* Best Selling Products */}
         <Card>
           <CardHeader>
-            <CardTitle>Best Selling Products</CardTitle>
+            <CardTitle>Produk Terlaris</CardTitle>
           </CardHeader>
           <CardContent>
             {bestSellingProducts.length === 0 || bestSellingProducts[0].quantitySold === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No sales data available</p>
+              <p className="text-muted-foreground text-center py-8">Data penjualan tidak tersedia</p>
             ) : (
               <div className="space-y-3">
                 {bestSellingProducts.map((product, index) => (
@@ -310,8 +455,8 @@ const Reports = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">{product.quantitySold} sold</p>
-                      <p className="text-sm text-muted-foreground">${product.revenue.toFixed(2)}</p>
+                      <p className="font-semibold">{product.quantitySold} terjual</p>
+                      <p className="text-sm text-muted-foreground">Rp{product.revenue.toLocaleString('id-ID')}</p>
                     </div>
                   </div>
                 ))}
@@ -324,11 +469,11 @@ const Reports = () => {
       {/* Least Selling Products */}
       <Card>
         <CardHeader>
-          <CardTitle>Products Needing Attention</CardTitle>
+          <CardTitle>Produk Perlu Perhatian</CardTitle>
         </CardHeader>
         <CardContent>
           {worstSellingProducts.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No products need attention</p>
+            <p className="text-muted-foreground text-center py-8">Tidak ada produk yang perlu perhatian</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {worstSellingProducts.map((product) => (
@@ -341,16 +486,16 @@ const Reports = () => {
                         variant={product.stock < 10 ? "destructive" : "secondary"}
                         className={product.stock < 10 ? "bg-warning text-warning-foreground" : ""}
                       >
-                        {product.stock} in stock
+                        {product.stock} stok
                       </Badge>
                       {product.quantitySold === 0 && (
-                        <Badge variant="outline">No sales</Badge>
+                        <Badge variant="outline">Belum terjual</Badge>
                       )}
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-muted-foreground">{product.quantitySold} sold</p>
-                    <p className="font-semibold">${product.revenue.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">{product.quantitySold} terjual</p>
+                    <p className="font-semibold">Rp{product.revenue.toLocaleString('id-ID')}</p>
                   </div>
                 </div>
               ))}
@@ -363,29 +508,29 @@ const Reports = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Sales Management</span>
-            <Badge variant="secondary">{state.sales.length} Total Sales</Badge>
+            <span>Manajemen Penjualan</span>
+            <Badge variant="secondary">{state.sales.length} Total Transaksi</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {state.sales.length === 0 ? (
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No sales records found</p>
+              <p className="text-muted-foreground">Tidak ada data penjualan ditemukan</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Transaction ID</TableHead>
-                    <TableHead>Date & Time</TableHead>
-                    <TableHead>Items</TableHead>
+                    <TableHead>ID Transaksi</TableHead>
+                    <TableHead>Tanggal & Waktu</TableHead>
+                    <TableHead>Produk</TableHead>
                     <TableHead>Subtotal</TableHead>
-                    <TableHead>Tax</TableHead>
+                    <TableHead>Pajak</TableHead>
                     <TableHead>Total</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Pembayaran</TableHead>
+                    <TableHead>Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -399,14 +544,14 @@ const Reports = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{sale.items.length} items</Badge>
+                        <Badge variant="outline">{sale.items.length} produk</Badge>
                       </TableCell>
-                      <TableCell>${(sale.subtotal || (sale.total - (sale.taxAmount || 0))).toFixed(2)}</TableCell>
-                      <TableCell>${(sale.taxAmount || 0).toFixed(2)}</TableCell>
-                      <TableCell className="font-semibold">${sale.total.toFixed(2)}</TableCell>
+                      <TableCell>Rp{(sale.subtotal || (sale.total - (sale.taxAmount || 0)).toLocaleString('id-ID'))}</TableCell>
+                      <TableCell>Rp{(sale.taxAmount || 0).toLocaleString('id-ID')}</TableCell>
+                      <TableCell className="font-semibold">Rp{sale.total.toLocaleString('id-ID')}</TableCell>
                       <TableCell>
                         <Badge variant={sale.paymentMethod === 'cash' ? 'default' : 'secondary'}>
-                          {sale.paymentMethod.toUpperCase()}
+                          {sale.paymentMethod === 'cash' ? 'Tunai' : 'Kartu'}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -419,26 +564,26 @@ const Reports = () => {
                             </DialogTrigger>
                             <DialogContent className="max-w-md">
                               <DialogHeader>
-                                <DialogTitle>Sale Details - #{sale.id}</DialogTitle>
+                                <DialogTitle>Detail Penjualan - #{sale.id}</DialogTitle>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                   <div>
-                                    <p className="font-medium">Date:</p>
-                                    <p>{sale.date.toLocaleString()}</p>
+                                    <p className="font-medium">Tanggal:</p>
+                                    <p>{sale.date.toLocaleString('id-ID')}</p>
                                   </div>
                                   <div>
-                                    <p className="font-medium">Payment:</p>
-                                    <p className="capitalize">{sale.paymentMethod}</p>
+                                    <p className="font-medium">Pembayaran:</p>
+                                    <p className="capitalize">{sale.paymentMethod === 'cash' ? 'Tunai' : 'Kartu'}</p>
                                   </div>
                                 </div>
                                 <div>
-                                  <p className="font-medium mb-2">Items:</p>
+                                  <p className="font-medium mb-2">Produk:</p>
                                   <div className="space-y-2">
                                     {sale.items.map((item, index) => (
                                       <div key={index} className="flex justify-between text-sm bg-muted/50 p-2 rounded">
                                         <span>{item.product.name} × {item.quantity}</span>
-                                        <span>${(item.product.price * item.quantity).toFixed(2)}</span>
+                                        <span>Rp{(item.product.price * item.quantity).toLocaleString('id-ID')}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -446,15 +591,15 @@ const Reports = () => {
                                 <div className="border-t pt-4 space-y-1">
                                   <div className="flex justify-between text-sm">
                                     <span>Subtotal:</span>
-                                    <span>${(sale.subtotal || (sale.total - (sale.taxAmount || 0))).toFixed(2)}</span>
+                                    <span>Rp{(sale.subtotal || (sale.total - (sale.taxAmount || 0)).toLocaleString('id-ID'))}</span>
                                   </div>
                                   <div className="flex justify-between text-sm">
-                                    <span>Tax:</span>
-                                    <span>${(sale.taxAmount || 0).toFixed(2)}</span>
+                                    <span>Pajak:</span>
+                                    <span>Rp{(sale.taxAmount || 0).toLocaleString('id-ID')}</span>
                                   </div>
                                   <div className="flex justify-between font-semibold">
                                     <span>Total:</span>
-                                    <span>${sale.total.toFixed(2)}</span>
+                                    <span>Rp{sale.total.toLocaleString('id-ID')}</span>
                                   </div>
                                 </div>
                               </div>
@@ -477,18 +622,18 @@ const Reports = () => {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Sale</AlertDialogTitle>
+                                <AlertDialogTitle>Hapus Penjualan</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete sale #{sale.id}? This action cannot be undone.
+                                  Apakah Anda yakin ingin menghapus penjualan #{sale.id}? Tindakan ini tidak dapat dibatalkan.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() => handleDeleteSale(sale.id)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
-                                  Delete
+                                  Hapus
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -508,7 +653,7 @@ const Reports = () => {
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Sale - #{selectedSale?.id}</DialogTitle>
+            <DialogTitle>Edit Penjualan - #{selectedSale?.id}</DialogTitle>
           </DialogHeader>
           {selectedSale && (
             <EditSaleForm
@@ -546,20 +691,20 @@ const EditSaleForm = ({ sale, onSave, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label htmlFor="payment-method">Payment Method</Label>
+  <Label htmlFor="payment-method">Metode Pembayaran</Label>
         <select
           id="payment-method"
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
           className="w-full mt-1 p-2 border border-input rounded-md bg-background"
         >
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
+          <option value="cash">Tunai</option>
+          <option value="card">Kartu</option>
         </select>
       </div>
       
       <div>
-        <Label htmlFor="total">Total Amount ($)</Label>
+  <Label htmlFor="total">Total (Rp)</Label>
         <Input
           id="total"
           type="number"
@@ -573,10 +718,10 @@ const EditSaleForm = ({ sale, onSave, onCancel }) => {
       
       <div className="flex justify-end space-x-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          Batal
         </Button>
         <Button type="submit">
-          Update Sale
+          Update Penjualan
         </Button>
       </div>
     </form>

@@ -11,6 +11,7 @@ import POS from "@/pages/POS";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
 import NotFound from "./pages/NotFound";
+import KasirFront from "@/pages/KasirFront";
 
 const queryClient = new QueryClient();
 
@@ -21,20 +22,29 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <div className="min-h-screen bg-background">
-            <Navigation />
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/pos" element={<POS />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/settings" element={<Settings />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-          </div>
+          <Routes>
+            {/* Cashier-only POS front page, no navigation */}
+            <Route path="/kasir" element={<KasirFront />} />
+            {/* Main app with navigation */}
+            <Route
+              path="*"
+              element={
+                <div className="min-h-screen bg-background">
+                  <Navigation />
+                  <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <Routes>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/products" element={<Products />} />
+                      <Route path="/pos" element={<POS />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </main>
+                </div>
+              }
+            />
+          </Routes>
         </BrowserRouter>
       </POSProvider>
     </TooltipProvider>

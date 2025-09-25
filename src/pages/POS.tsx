@@ -58,10 +58,9 @@ const POS = () => {
   };
 
   const handleCheckout = (paymentMethod: 'cash' | 'card') => {
-    if (state.cart.length === 0) return;
-    
-    completeSale(paymentMethod);
-    setIsCheckoutOpen(false);
+  if (state.cart.length === 0) return;
+  completeSale(paymentMethod);
+  setIsCheckoutOpen(false);
   };
 
   return (
@@ -69,8 +68,8 @@ const POS = () => {
       {/* Products Section */}
       <div className="lg:col-span-2 flex flex-col space-y-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Point of Sale</h1>
-          <p className="text-muted-foreground">Select products to add to cart</p>
+    <h1 className="text-3xl font-bold text-foreground">Kasir</h1>
+    <p className="text-muted-foreground">Pilih produk untuk ditambahkan ke keranjang</p>
         </div>
 
         {/* Filters */}
@@ -79,7 +78,7 @@ const POS = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search products..."
+                placeholder="Cari produk..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -93,7 +92,7 @@ const POS = () => {
           >
             {categories.map(category => (
               <option key={category} value={category}>
-                {category === 'all' ? 'All Categories' : category}
+                {category === 'all' ? 'Semua Kategori' : category}
               </option>
             ))}
           </select>
@@ -119,11 +118,11 @@ const POS = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-bold text-foreground">
-                      ${product.price.toFixed(2)}
-                    </span>
+                      <span className="text-xl font-bold text-foreground">
+                        Rp{product.price.toLocaleString('id-ID')}
+                      </span>
                     <Badge variant="outline">
-                      {product.stock} in stock
+                      {product.stock} stok
                     </Badge>
                   </div>
                   {product.description && (
@@ -139,11 +138,11 @@ const POS = () => {
           {filteredProducts.length === 0 && (
             <div className="text-center py-12">
               <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground">No products available</h3>
+              <h3 className="text-lg font-semibold text-foreground">Tidak ada produk tersedia</h3>
               <p className="text-muted-foreground">
                 {searchTerm || selectedCategory !== 'all' 
-                  ? 'Try adjusting your search or filters' 
-                  : 'No products in stock'
+                  ? 'Coba ubah pencarian atau filter' 
+                  : 'Tidak ada produk di stok'
                 }
               </p>
             </div>
@@ -158,7 +157,7 @@ const POS = () => {
             <div className="flex justify-between items-center">
               <CardTitle className="flex items-center space-x-2">
                 <ShoppingCart className="h-5 w-5" />
-                <span>Shopping Cart</span>
+                <span>Keranjang Belanja</span>
               </CardTitle>
               {state.cart.length > 0 && (
                 <Button
@@ -167,7 +166,7 @@ const POS = () => {
                   onClick={clearCart}
                 >
                   <Trash2 className="h-4 w-4 mr-1" />
-                  Clear
+                  Kosongkan
                 </Button>
               )}
             </div>
@@ -177,7 +176,7 @@ const POS = () => {
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <ShoppingCart className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-muted-foreground">Cart is empty</p>
+                  <p className="text-muted-foreground">Keranjang kosong</p>
                 </div>
               </div>
             ) : (
@@ -187,7 +186,7 @@ const POS = () => {
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{item.product.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        ${item.product.price.toFixed(2)} each
+                        Rp{item.product.price.toLocaleString('id-ID')} / pcs
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -228,24 +227,24 @@ const POS = () => {
             <CardContent className="p-4 space-y-3">
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>Rp{subtotal.toLocaleString('id-ID')}</span>
               </div>
               {state.taxSettings.enabled && (
                 <div className="flex justify-between text-sm">
                   <span>{state.taxSettings.name} ({state.taxSettings.rate}%)</span>
-                  <span>${taxAmount.toFixed(2)}</span>
+                  <span>Rp{taxAmount.toLocaleString('id-ID')}</span>
                 </div>
               )}
               <Separator />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>Rp{total.toLocaleString('id-ID')}</span>
               </div>
               <Button 
                 className="w-full bg-gradient-to-r from-primary to-primary/80"
                 onClick={() => setIsCheckoutOpen(true)}
               >
-                Checkout
+                Bayar
               </Button>
             </CardContent>
           </Card>
@@ -256,28 +255,28 @@ const POS = () => {
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Complete Payment</DialogTitle>
+            <DialogTitle>Selesaikan Pembayaran</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex justify-between mb-2">
                 <span>Subtotal:</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>Rp{subtotal.toLocaleString('id-ID')}</span>
               </div>
               {state.taxSettings.enabled && (
                 <div className="flex justify-between mb-2">
                   <span>{state.taxSettings.name}:</span>
-                  <span>${taxAmount.toFixed(2)}</span>
+                  <span>Rp{taxAmount.toLocaleString('id-ID')}</span>
                 </div>
               )}
               <Separator className="my-2" />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total:</span>
-                <span>${total.toFixed(2)}</span>
+                <span>Rp{total.toLocaleString('id-ID')}</span>
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              Select a payment method to complete the transaction.
+              Pilih metode pembayaran untuk menyelesaikan transaksi.
             </p>
           </div>
           <DialogFooter className="space-x-2">
@@ -285,7 +284,7 @@ const POS = () => {
               variant="outline"
               onClick={() => setIsCheckoutOpen(false)}
             >
-              Cancel
+              Batal
             </Button>
             <Button
               variant="outline"
@@ -293,14 +292,14 @@ const POS = () => {
               className="flex items-center space-x-2"
             >
               <Banknote className="h-4 w-4" />
-              <span>Cash</span>
+              <span>Tunai</span>
             </Button>
             <Button
-              onClick={() => handleCheckout('card')}
+              onClick={() => handleCheckout('qris')}
               className="flex items-center space-x-2 bg-gradient-to-r from-primary to-primary/80"
             >
               <CreditCard className="h-4 w-4" />
-              <span>Card</span>
+              <span>QRIS</span>
             </Button>
           </DialogFooter>
         </DialogContent>

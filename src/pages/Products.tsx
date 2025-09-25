@@ -126,32 +126,32 @@ const Products = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Product Management</h1>
-          <p className="text-muted-foreground">Manage your inventory and product catalog</p>
+          <h1 className="text-3xl font-bold text-foreground">Manajemen Produk</h1>
+          <p className="text-muted-foreground">Kelola inventaris dan katalog produk Anda</p>
         </div>
         
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="bg-gradient-to-r from-primary to-primary/80">
               <Plus className="h-4 w-4 mr-2" />
-              Add Product
+              Tambah Produk
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>
-                {editingProduct ? 'Edit Product' : 'Add New Product'}
+                {editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="name">Product Name *</Label>
+                  <Label htmlFor="name">Nama Produk *</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="Enter product name"
+                    placeholder="Masukkan nama produk"
                     required
                   />
                 </div>
@@ -161,7 +161,7 @@ const Products = () => {
                     id="sku"
                     value={formData.sku}
                     onChange={(e) => setFormData({...formData, sku: e.target.value})}
-                    placeholder="Enter SKU"
+                    placeholder="Masukkan SKU"
                     required
                   />
                 </div>
@@ -169,7 +169,7 @@ const Products = () => {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="price">Price *</Label>
+                  <Label htmlFor="price">Harga *</Label>
                   <Input
                     id="price"
                     type="number"
@@ -182,7 +182,7 @@ const Products = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="stock">Stock Quantity *</Label>
+                  <Label htmlFor="stock">Jumlah Stok *</Label>
                   <Input
                     id="stock"
                     type="number"
@@ -196,23 +196,23 @@ const Products = () => {
               </div>
               
               <div>
-                <Label htmlFor="category">Category *</Label>
+                <Label htmlFor="category">Kategori *</Label>
                 <Input
                   id="category"
                   value={formData.category}
                   onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  placeholder="Enter category"
+                  placeholder="Masukkan kategori"
                   required
                 />
               </div>
               
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">Deskripsi</Label>
                 <Input
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  placeholder="Product description (optional)"
+                  placeholder="Deskripsi produk (opsional)"
                 />
               </div>
               
@@ -222,10 +222,10 @@ const Products = () => {
                   variant="outline"
                   onClick={() => setIsAddDialogOpen(false)}
                 >
-                  Cancel
+                  Batal
                 </Button>
                 <Button type="submit" className="bg-gradient-to-r from-primary to-primary/80">
-                  {editingProduct ? 'Update Product' : 'Add Product'}
+                  {editingProduct ? 'Update Produk' : 'Tambah Produk'}
                 </Button>
               </div>
             </form>
@@ -239,7 +239,7 @@ const Products = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              placeholder="Search products..."
+              placeholder="Cari produk..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -253,7 +253,7 @@ const Products = () => {
         >
           {categories.map(category => (
             <option key={category} value={category}>
-              {category === 'all' ? 'All Categories' : category}
+              {category === 'all' ? 'Semua Kategori' : category}
             </option>
           ))}
         </select>
@@ -291,7 +291,7 @@ const Products = () => {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-2xl font-bold text-foreground">
-                    ${product.price.toFixed(2)}
+                    Rp{product.price.toLocaleString('id-ID')}
                   </span>
                   <Badge variant="secondary">{product.category}</Badge>
                 </div>
@@ -299,7 +299,7 @@ const Products = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-1">
                     <Package className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Stock:</span>
+                    <span className="text-sm text-muted-foreground">Stok:</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     {product.stock < 10 && (
@@ -309,7 +309,7 @@ const Products = () => {
                       variant={product.stock < 10 ? "destructive" : "default"}
                       className={product.stock < 10 ? "bg-warning text-warning-foreground" : ""}
                     >
-                      {product.stock} units
+                      {product.stock} pcs
                     </Badge>
                   </div>
                 </div>
@@ -328,11 +328,11 @@ const Products = () => {
       {filteredProducts.length === 0 && (
         <div className="text-center py-12">
           <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">No products found</h3>
+          <h3 className="text-lg font-semibold text-foreground">Produk tidak ditemukan</h3>
           <p className="text-muted-foreground">
             {searchTerm || selectedCategory !== 'all' 
-              ? 'Try adjusting your search or filters' 
-              : 'Add your first product to get started'
+              ? 'Coba ubah pencarian atau filter' 
+              : 'Tambahkan produk pertama Anda untuk memulai'
             }
           </p>
         </div>

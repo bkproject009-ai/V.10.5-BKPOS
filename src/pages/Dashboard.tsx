@@ -44,28 +44,28 @@ const Dashboard = () => {
 
   const stats = [
     {
-      title: 'Total Revenue',
-      value: `$${totalRevenue.toFixed(2)}`,
+      title: 'Total Pendapatan',
+      value: `Rp${totalRevenue.toLocaleString('id-ID')}`,
       icon: DollarSign,
       trend: '+12%',
       trendUp: true
     },
     {
-      title: 'Transactions',
+      title: 'Transaksi',
       value: totalTransactions.toString(),
       icon: ShoppingCart,
       trend: '+5%',
       trendUp: true
     },
     {
-      title: 'Avg Order Value',
-      value: `$${averageOrderValue.toFixed(2)}`,
+      title: 'Rata-rata Nilai Pesanan',
+      value: `Rp${averageOrderValue.toLocaleString('id-ID')}`,
       icon: TrendingUp,
       trend: '+8%',
       trendUp: true
     },
     {
-      title: 'Products',
+      title: 'Produk',
       value: state.products.length.toString(),
       icon: Package,
       trend: '+2',
@@ -76,8 +76,8 @@ const Dashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your retail operations</p>
+        <h1 className="text-3xl font-bold text-foreground">Dasbor</h1>
+        <p className="text-muted-foreground">Ringkasan operasional toko Anda</p>
       </div>
 
       {/* Stats Grid */}
@@ -119,22 +119,22 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-success" />
-              <span>Product Performance</span>
+              <span>Kinerja Produk</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="p-4 bg-success/10 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Best Selling</p>
+                  <p className="text-sm text-muted-foreground">Terlaris</p>
                   <p className="font-semibold text-foreground">{bestSellingProduct?.name}</p>
                   <p className="text-sm text-success">
-                    {productSales.get(bestSellingProduct?.id) || 0} units sold
+                    {productSales.get(bestSellingProduct?.id) || 0} unit terjual
                   </p>
                 </div>
                 <Badge variant="secondary" className="bg-success text-success-foreground">
                   <TrendingUp className="h-3 w-3 mr-1" />
-                  Top
+                  Teratas
                 </Badge>
               </div>
             </div>
@@ -142,15 +142,15 @@ const Dashboard = () => {
             <div className="p-4 bg-warning/10 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Needs Attention</p>
+                  <p className="text-sm text-muted-foreground">Perlu Perhatian</p>
                   <p className="font-semibold text-foreground">{worstSellingProduct?.name}</p>
                   <p className="text-sm text-warning">
-                    {productSales.get(worstSellingProduct?.id) || 0} units sold
+                    {productSales.get(worstSellingProduct?.id) || 0} unit terjual
                   </p>
                 </div>
                 <Badge variant="secondary" className="bg-warning text-warning-foreground">
                   <TrendingDown className="h-3 w-3 mr-1" />
-                  Low
+                  Rendah
                 </Badge>
               </div>
             </div>
@@ -162,7 +162,7 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
-              <span>Low Stock Alerts</span>
+              <span>Stok Rendah</span>
               {lowStockProducts.length > 0 && (
                 <Badge variant="secondary" className="bg-warning text-warning-foreground">
                   {lowStockProducts.length}
@@ -173,7 +173,7 @@ const Dashboard = () => {
           <CardContent>
             {lowStockProducts.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
-                All products are well stocked! 🎉
+                Semua produk tersedia dengan baik! 🎉
               </p>
             ) : (
               <div className="space-y-3">
@@ -184,13 +184,13 @@ const Dashboard = () => {
                       <p className="text-sm text-muted-foreground">{product.sku}</p>
                     </div>
                     <Badge variant="outline" className="border-warning text-warning">
-                      {product.stock} left
+                      {product.stock} sisa
                     </Badge>
                   </div>
                 ))}
                 {lowStockProducts.length > 5 && (
                   <p className="text-sm text-muted-foreground text-center">
-                    +{lowStockProducts.length - 5} more items need restocking
+                    +{lowStockProducts.length - 5} produk lagi perlu restock
                   </p>
                 )}
               </div>
@@ -202,12 +202,12 @@ const Dashboard = () => {
       {/* Recent Sales */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
+          <CardTitle>Transaksi Terbaru</CardTitle>
         </CardHeader>
         <CardContent>
           {state.sales.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
-              No transactions yet. Start selling to see recent activity!
+              Belum ada transaksi. Mulai penjualan untuk melihat aktivitas terbaru!
             </p>
           ) : (
             <div className="space-y-3">
@@ -215,14 +215,14 @@ const Dashboard = () => {
                 <div key={sale.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
                   <div>
                     <p className="font-medium text-foreground">
-                      Transaction #{sale.id.slice(-6)}
+                      Transaksi #{sale.id.slice(-6)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {sale.date.toLocaleDateString()} • {sale.items.length} items
+                      {sale.date.toLocaleDateString('id-ID')} • {sale.items.length} produk
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-foreground">${sale.total.toFixed(2)}</p>
+                    <p className="font-semibold text-foreground">Rp{sale.total.toLocaleString('id-ID')}</p>
                     <Badge variant="outline" className="capitalize">
                       {sale.paymentMethod}
                     </Badge>

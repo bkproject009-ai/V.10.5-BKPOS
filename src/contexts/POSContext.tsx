@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
+import * as db from '@/lib/db';
 
 export interface Product {
   id: string;
@@ -24,13 +25,13 @@ export interface Sale {
   taxAmount: number;
   total: number;
   date: Date;
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'card' | 'qris';
 }
 
+import { TaxType } from '@/lib/tax';
+
 export interface TaxSettings {
-  enabled: boolean;
-  rate: number; // percentage (e.g., 8.5 for 8.5%)
-  name: string; // e.g., "Sales Tax", "VAT", etc.
+  taxTypes: TaxType[];
 }
 
 interface POSState {
@@ -38,9 +39,16 @@ interface POSState {
   cart: CartItem[];
   sales: Sale[];
   taxSettings: TaxSettings;
+  isLoading: boolean;
+  error: string | null;
 }
 
 type POSAction =
+  | { type: 'SET_LOADING'; loading: boolean }
+  | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'SET_PRODUCTS'; products: Product[] }
+  | { type: 'SET_SALES'; sales: Sale[] }
+  | { type: 'SET_TAX_SETTINGS'; taxSettings: TaxSettings }
   | { type: 'ADD_PRODUCT'; product: Product }
   | { type: 'UPDATE_PRODUCT'; id: string; product: Partial<Product> }
   | { type: 'DELETE_PRODUCT'; id: string }
@@ -48,8 +56,7 @@ type POSAction =
   | { type: 'UPDATE_CART_ITEM'; productId: string; quantity: number }
   | { type: 'REMOVE_FROM_CART'; productId: string }
   | { type: 'CLEAR_CART' }
-  | { type: 'COMPLETE_SALE'; paymentMethod: 'cash' | 'card' }
-  | { type: 'UPDATE_TAX_SETTINGS'; taxSettings: TaxSettings }
+  | { type: 'ADD_SALE'; sale: Sale }
   | { type: 'UPDATE_SALE'; id: string; sale: Partial<Sale> }
   | { type: 'DELETE_SALE'; id: string };
 
@@ -103,14 +110,14 @@ const initialProducts: Product[] = [
 ];
 
 const initialState: POSState = {
-  products: initialProducts,
+  products: [],
   cart: [],
   sales: [],
   taxSettings: {
-    enabled: true,
-    rate: 8.5,
-    name: 'Sales Tax'
-  }
+    taxTypes: []
+  },
+  isLoading: true,
+  error: null
 };
 
 const posReducer = (state: POSState, action: POSAction): POSState => {
@@ -214,39 +221,31 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
         cart: []
       };
 
-    case 'COMPLETE_SALE': {
-      const subtotal = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-      const taxAmount = state.taxSettings.enabled ? (subtotal * state.taxSettings.rate) / 100 : 0;
-      const total = subtotal + taxAmount;
-      
-      const sale: Sale = {
-        id: Date.now().toString(),
-        items: [...state.cart],
-        subtotal,
-        taxAmount,
-        total,
-        date: new Date(),
-        paymentMethod: action.paymentMethod
-      };
-
-      // Update stock levels
-      const updatedProducts = state.products.map(product => {
-        const cartItem = state.cart.find(item => item.product.id === product.id);
-        if (cartItem) {
-          return { ...product, stock: product.stock - cartItem.quantity };
-        }
-        return product;
-      });
-
+    case 'SET_LOADING':
       return {
         ...state,
-        products: updatedProducts,
-        cart: [],
-        sales: [...state.sales, sale]
+        isLoading: action.loading
       };
-    }
 
-    case 'UPDATE_TAX_SETTINGS':
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.error
+      };
+
+    case 'SET_PRODUCTS':
+      return {
+        ...state,
+        products: action.products
+      };
+
+    case 'SET_SALES':
+      return {
+        ...state,
+        sales: action.sales
+      };
+
+    case 'SET_TAX_SETTINGS':
       return {
         ...state,
         taxSettings: action.taxSettings
@@ -280,11 +279,10 @@ interface POSContextType {
   updateCartItem: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
-  completeSale: (paymentMethod: 'cash' | 'card') => void;
-  updateTaxSettings: (taxSettings: TaxSettings) => void;
+  completeSale: (paymentMethod: 'cash' | 'card' | 'qris') => void;
   updateSale: (id: string, sale: Partial<Sale>) => void;
   deleteSale: (id: string) => void;
-  calculateTotals: () => { subtotal: number; taxAmount: number; total: number };
+  calculateTotals: () => { subtotal: number; taxes: { id: string; saleId: string; taxTypeId: string; taxAmount: number; }[]; total: number };
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -292,20 +290,90 @@ const POSContext = createContext<POSContextType | undefined>(undefined);
 export const POSProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(posReducer, initialState);
 
-  const addProduct = (product: Omit<Product, 'id'>) => {
-    const newProduct: Product = {
-      ...product,
-      id: Date.now().toString()
+  // Initial data load
+  useEffect(() => {
+    const loadInitialData = async () => {
+      dispatch({ type: 'SET_LOADING', loading: true });
+      try {
+        const [products, sales, taxTypes] = await Promise.all([
+          db.fetchProducts(),
+          db.fetchSales(),
+          db.getTaxTypes()
+        ]);
+
+        dispatch({ type: 'SET_PRODUCTS', products });
+        dispatch({ type: 'SET_SALES', sales });
+        dispatch({ 
+          type: 'SET_TAX_SETTINGS', 
+          taxSettings: { taxTypes } 
+        });
+      } catch (error) {
+        dispatch({ type: 'SET_ERROR', error: (error as Error).message });
+        toast({
+          title: "Error",
+          description: "Gagal memuat data",
+          variant: "destructive"
+        });
+      } finally {
+        dispatch({ type: 'SET_LOADING', loading: false });
+      }
     };
-    dispatch({ type: 'ADD_PRODUCT', product: newProduct });
+
+    loadInitialData();
+  }, []);
+
+  const addProduct = async (product: Omit<Product, 'id'>) => {
+    try {
+      const newProduct = await db.addProduct(product);
+      dispatch({ type: 'ADD_PRODUCT', product: newProduct });
+      toast({
+        title: "Produk Ditambahkan",
+        description: "Produk baru berhasil ditambahkan",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menambahkan produk",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
-  const updateProduct = (id: string, product: Partial<Product>) => {
-    dispatch({ type: 'UPDATE_PRODUCT', id, product });
+  const updateProduct = async (id: string, product: Partial<Product>) => {
+    try {
+      const updatedProduct = await db.updateProduct(id, product);
+      dispatch({ type: 'UPDATE_PRODUCT', id, product: updatedProduct });
+      toast({
+        title: "Produk Diperbarui",
+        description: "Data produk berhasil diperbarui",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal memperbarui produk",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
-  const deleteProduct = (id: string) => {
-    dispatch({ type: 'DELETE_PRODUCT', id });
+  const deleteProduct = async (id: string) => {
+    try {
+      await db.deleteProduct(id);
+      dispatch({ type: 'DELETE_PRODUCT', id });
+      toast({
+        title: "Produk Dihapus",
+        description: "Produk berhasil dihapus",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menghapus produk",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
   const addToCart = (product: Product, quantity: number = 1) => {
@@ -324,44 +392,92 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     dispatch({ type: 'CLEAR_CART' });
   };
 
-  const completeSale = (paymentMethod: 'cash' | 'card') => {
-    dispatch({ type: 'COMPLETE_SALE', paymentMethod });
-    toast({
-      title: "Sale Completed",
-      description: "Transaction has been processed successfully",
-      variant: "default"
-    });
+  const completeSale = async (paymentMethod: 'cash' | 'card' | 'qris') => {
+    const { subtotal, taxes, total } = calculateTotals();
+    
+    try {
+      const sale = await db.createSale(state.cart, subtotal, taxes, total, paymentMethod);
+      dispatch({ type: 'ADD_SALE', sale });
+      dispatch({ type: 'CLEAR_CART' });
+      
+      // Update local products stock
+      state.cart.forEach(item => {
+        dispatch({
+          type: 'UPDATE_PRODUCT',
+          id: item.product.id,
+          product: { stock: item.product.stock - item.quantity }
+        });
+      });
+
+      toast({
+        title: "Transaksi Selesai",
+        description: "Pembayaran berhasil diproses",
+        variant: "default"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal memproses transaksi",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
-  const updateTaxSettings = (taxSettings: TaxSettings) => {
-    dispatch({ type: 'UPDATE_TAX_SETTINGS', taxSettings });
-    toast({
-      title: "Tax Settings Updated",
-      description: "Tax configuration has been saved",
-    });
+
+
+  const updateSale = async (id: string, sale: Partial<Sale>) => {
+    try {
+      await db.updateSale(id, sale);
+      dispatch({ type: 'UPDATE_SALE', id, sale });
+      toast({
+        title: "Transaksi Diperbarui",
+        description: "Data transaksi berhasil diperbarui",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal memperbarui transaksi",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
-  const updateSale = (id: string, sale: Partial<Sale>) => {
-    dispatch({ type: 'UPDATE_SALE', id, sale });
-    toast({
-      title: "Sale Updated",
-      description: "Sale record has been modified",
-    });
-  };
-
-  const deleteSale = (id: string) => {
-    dispatch({ type: 'DELETE_SALE', id });
-    toast({
-      title: "Sale Deleted",
-      description: "Sale record has been removed",
-    });
+  const deleteSale = async (id: string) => {
+    try {
+      await db.deleteSale(id);
+      dispatch({ type: 'DELETE_SALE', id });
+      toast({
+        title: "Transaksi Dihapus",
+        description: "Data transaksi berhasil dihapus",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menghapus transaksi",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
   const calculateTotals = () => {
     const subtotal = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    const taxAmount = state.taxSettings.enabled ? (subtotal * state.taxSettings.rate) / 100 : 0;
-    const total = subtotal + taxAmount;
-    return { subtotal, taxAmount, total };
+    let total = subtotal;
+    const taxes = state.taxSettings.taxTypes
+      .filter(tax => tax.enabled)
+      .map(tax => {
+        const taxAmount = (subtotal * tax.rate) / 100;
+        total += taxAmount;
+        return {
+          id: '',
+          saleId: '',
+          taxTypeId: tax.id,
+          taxAmount
+        };
+      });
+    return { subtotal, taxes, total };
   };
 
   const contextValue: POSContextType = {
@@ -374,7 +490,6 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     removeFromCart,
     clearCart,
     completeSale,
-    updateTaxSettings,
     updateSale,
     deleteSale,
     calculateTotals

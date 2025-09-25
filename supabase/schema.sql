@@ -1,0 +1,71 @@
+-- Create products table
+create table products (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  name text not null,
+  price numeric(10,2) not null,
+  stock integer not null,
+  category text not null,
+  sku text unique not null,
+  description text,
+  image text
+);
+
+-- Create sales table
+create table sales (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  subtotal numeric(10,2) not null,
+  tax_amount numeric(10,2) not null,
+  total numeric(10,2) not null,
+  payment_method text not null check (payment_method in ('cash', 'card', 'qris'))
+);
+
+-- Create sale_items table
+create table sale_items (
+  id uuid default gen_random_uuid() primary key,
+  sale_id uuid references sales(id) on delete cascade,
+  product_id uuid references products(id),
+  quantity integer not null,
+  price_at_time numeric(10,2) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create tax_types table
+create table tax_types (
+  id uuid default gen_random_uuid() primary key,
+  code text not null unique,
+  name text not null,
+  description text,
+  rate numeric(5,2) not null,
+  enabled boolean not null default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create sales_taxes table to store multiple taxes per sale
+create table sales_taxes (
+  id uuid default gen_random_uuid() primary key,
+  sale_id uuid references sales(id) on delete cascade,
+  tax_type_id uuid references tax_types(id),
+  tax_amount numeric(10,2) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create trigger to update updated_at
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger update_tax_types_updated_at
+  before update on tax_types
+  for each row
+  execute function update_updated_at_column();
+
+-- Insert default tax (PPN 11%)
+insert into tax_types (code, name, description, rate) 
+values ('PPN', 'Pajak Pertambahan Nilai', 'PPN Indonesia', 11.00);
