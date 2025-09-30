@@ -7,7 +7,8 @@ import {
   BarChart3,
   Settings,
   Store,
-  LogOut
+  LogOut,
+  User
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -59,6 +60,11 @@ const Navigation = () => {
       path: '/settings',
       label: 'Settings',
       icon: Settings
+    },
+    {
+      path: '/profile',
+      label: 'Profile',
+      icon: User
     }
   ];
 

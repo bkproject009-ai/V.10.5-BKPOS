@@ -11,9 +11,11 @@ import Products from "@/pages/Products";
 import POS from "@/pages/POS";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
+import Profile from "@/pages/Profile";
 import NotFound from "./pages/NotFound";
 import KasirFront from "@/pages/KasirFront";
 import Login from "@/pages/Login";
+import EmailConfirmation from "@/pages/EmailConfirmation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,7 @@ const App = () => (
           <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/email-confirmation" element={<EmailConfirmation />} />
             {/* Cashier-only POS front page, no navigation */}
             <Route path="/kasir" element={<ProtectedRoute><KasirFront /></ProtectedRoute>} />
             {/* Main app with navigation */}
@@ -44,6 +47,7 @@ const App = () => (
                         <Route path="/pos" element={<POS />} />
                         <Route path="/reports" element={<Reports />} />
                         <Route path="/settings" element={<Settings />} />
+                        <Route path="/profile" element={<Profile />} />
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </main>

@@ -54,6 +54,25 @@ export async function createSale(
 ): Promise<Sale> {
   const totalTax = taxes.reduce((sum, tax) => sum + tax.taxAmount, 0);
   
+  // Get current session to ensure we have an authenticated user
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session?.user) throw new Error('No authenticated user found');
+  
+  // Double check that the user exists in auth.users
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', session.user.id)
+    .single();
+    
+  if (userError) {
+    console.error('User verification error:', userError);
+    throw new Error('Failed to verify user existence');
+  }
+
+  const cashierId = session.user.id;
+
   // Start a Supabase transaction
   const { data: sale, error: saleError } = await supabase
     .from('sales')
@@ -61,7 +80,8 @@ export async function createSale(
       subtotal,
       tax_amount: totalTax,
       total,
-      payment_method: paymentMethod
+      payment_method: paymentMethod,
+      cashier_id: cashierId
     }])
     .select()
     .single();

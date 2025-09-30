@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, role?: string) => Promise<{ user: User | null; session: Session | null }>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -45,23 +45,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await initializeDatabase();
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, role: string = 'cashier') => {
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          role: 'staff' // You can add custom user metadata here
-        }
+          role: role // Set the user's role from the signup form
+        },
+        emailRedirectTo: `${window.location.origin}/login`
       }
     });
     
-    if (error) throw error;
-
-    // If sign up is successful, automatically sign in
-    if (data.user) {
-      await signIn(email, password);
+    if (error) {
+      // Transform Supabase error messages to be more user-friendly
+      if (error.message.includes('unique constraint')) {
+        throw new Error('This email is already registered');
+      }
+      throw error;
     }
+
+    if (!data.user) {
+      throw new Error('Failed to create account');
+    }
+
+    // Do not automatically sign in - wait for email verification
+    return data;
   };
 
   const signOut = async () => {
