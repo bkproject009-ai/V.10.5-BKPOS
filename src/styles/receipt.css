@@ -1,0 +1,32 @@
+@media print {
+  /* Hide everything except receipt when printing */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only receipt content when printing */
+  .receipt-content,
+  .receipt-content * {
+    visibility: visible;
+  }
+  
+  /* Position receipt at the top of the page */
+  .receipt-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Remove backgrounds and borders for better printing */
+  .receipt-content {
+    background: white !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide print button when printing */
+  .print-button {
+    display: none !important;
+  }
+}
