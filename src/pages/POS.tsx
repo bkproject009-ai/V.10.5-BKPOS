@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { usePOS } from '@/contexts/POSContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Receipt } from '@/components/ui/receipt';
 import { 
   Dialog,
   DialogContent,
@@ -27,6 +28,9 @@ const POS = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   // Filter products
   const filteredProducts = state.products.filter(product => {
@@ -40,7 +44,7 @@ const POS = () => {
   const categories = ['all', ...new Set(state.products.map(p => p.category))];
 
   // Calculate totals using the context method
-  const { subtotal, taxAmount, total } = calculateTotals();
+  const { subtotal, taxes, total } = calculateTotals();
 
   const handleAddToCart = (productId: string) => {
     const product = state.products.find(p => p.id === productId);
@@ -57,10 +61,20 @@ const POS = () => {
     }
   };
 
-  const handleCheckout = (paymentMethod: 'cash' | 'card') => {
-  if (state.cart.length === 0) return;
-  completeSale(paymentMethod);
-  setIsCheckoutOpen(false);
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<'cash' | 'qris'>('cash');
+
+  const handleCheckout = async (paymentMethod: 'cash' | 'qris') => {
+    if (state.cart.length === 0) return;
+    
+    try {
+      await completeSale(paymentMethod);
+      setLastPaymentMethod(paymentMethod);
+      setIsCheckoutOpen(false);
+      setShowReceipt(true);
+    } catch (error) {
+      console.error('Failed to complete sale:', error);
+      // Todo: Show error toast
+    }
   };
 
   return (
@@ -229,12 +243,12 @@ const POS = () => {
                 <span>Subtotal</span>
                 <span>Rp{subtotal.toLocaleString('id-ID')}</span>
               </div>
-              {state.taxSettings.enabled && (
-                <div className="flex justify-between text-sm">
-                  <span>{state.taxSettings.name} ({state.taxSettings.rate}%)</span>
-                  <span>Rp{taxAmount.toLocaleString('id-ID')}</span>
+              {taxes.map(tax => (
+                <div key={tax.taxTypeId} className="flex justify-between text-sm">
+                  <span>Pajak</span>
+                  <span>Rp{tax.taxAmount.toLocaleString('id-ID')}</span>
                 </div>
-              )}
+              ))}
               <Separator />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
@@ -263,12 +277,12 @@ const POS = () => {
                 <span>Subtotal:</span>
                 <span>Rp{subtotal.toLocaleString('id-ID')}</span>
               </div>
-              {state.taxSettings.enabled && (
-                <div className="flex justify-between mb-2">
-                  <span>{state.taxSettings.name}:</span>
-                  <span>Rp{taxAmount.toLocaleString('id-ID')}</span>
+              {taxes.map(tax => (
+                <div key={tax.taxTypeId} className="flex justify-between mb-2">
+                  <span>Pajak:</span>
+                  <span>Rp{tax.taxAmount.toLocaleString('id-ID')}</span>
                 </div>
-              )}
+              ))}
               <Separator className="my-2" />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total:</span>
@@ -300,6 +314,40 @@ const POS = () => {
             >
               <CreditCard className="h-4 w-4" />
               <span>QRIS</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt Dialog */}
+      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Struk Pembayaran</DialogTitle>
+          </DialogHeader>
+          <div ref={receiptRef}>
+            <Receipt 
+              items={state.cart} 
+              subtotal={subtotal}
+              tax={taxes.reduce((sum, tax) => sum + tax.taxAmount, 0)}
+              total={total}
+              paymentMethod={lastPaymentMethod}
+              date={new Date()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReceipt(false)}>
+              Tutup
+            </Button>
+            <Button 
+              onClick={() => {
+                if (receiptRef.current) {
+                  window.print();
+                }
+              }}
+              className="bg-gradient-to-r from-primary to-primary/80"
+            >
+              Cetak Struk
             </Button>
           </DialogFooter>
         </DialogContent>

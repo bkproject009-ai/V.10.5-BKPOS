@@ -58,19 +58,30 @@ export async function createSale(
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
   if (!session?.user) throw new Error('No authenticated user found');
-  
-  // Double check that the user exists in auth.users
+
+  // First verify that the user exists in public.users
   const { data: userData, error: userError } = await supabase
     .from('users')
     .select('id')
     .eq('id', session.user.id)
     .single();
-    
-  if (userError) {
-    console.error('User verification error:', userError);
-    throw new Error('Failed to verify user existence');
-  }
 
+  if (userError) {
+    console.error('User verification failed:', userError);
+    // Try to create user if doesn't exist
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert({
+        id: session.user.id,
+        email: session.user.email,
+        role: session.user.user_metadata.role || 'cashier'
+      });
+    if (insertError) {
+      console.error('Failed to create user:', insertError);
+      throw new Error('Failed to verify user access');
+    }
+  }
+  
   const cashierId = session.user.id;
 
   // Start a Supabase transaction
@@ -129,7 +140,7 @@ export async function createSale(
     id: sale.id,
     items,
     subtotal,
-    taxAmount,
+    taxAmount: totalTax,
     total,
     date: new Date(sale.created_at),
     paymentMethod
