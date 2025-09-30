@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -6,11 +6,33 @@ import {
   ShoppingCart, 
   BarChart3,
   Settings,
-  Store
+  Store,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        description: "Berhasil keluar dari sistem",
+      });
+      navigate('/login');
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Gagal keluar dari sistem",
+      });
+    }
+  };
 
   const navItems = [
     {
@@ -49,28 +71,36 @@ const Navigation = () => {
               <div className="bg-gradient-to-br from-primary to-primary/80 p-2 rounded-lg">
                 <Store className="h-6 w-6 text-primary-foreground" />
               </div>
-              <span className="text-xl font-bold text-foreground">RetailPOS</span>
+              <span className="text-xl font-bold">BK POS</span>
             </Link>
           </div>
-          
+
           <div className="flex items-center space-x-4">
+            {/* Navigation Items */}
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              
               return (
                 <Link key={item.path} to={item.path}>
                   <Button
-                    variant={isActive ? "default" : "ghost"}
-                    size="sm"
+                    variant={location.pathname === item.path ? 'default' : 'ghost'}
                     className="flex items-center space-x-2"
                   >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden sm:inline">{item.label}</span>
+                    <Icon className="h-5 w-5" />
+                    <span>{item.label}</span>
                   </Button>
                 </Link>
               );
             })}
+
+            {/* Logout Button */}
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="flex items-center space-x-2 text-red-500 hover:text-red-700 hover:bg-red-100"
+            >
+              <LogOut className="h-5 w-5" />
+              <span>Logout</span>
+            </Button>
           </div>
         </div>
       </div>

@@ -17,13 +17,22 @@ export interface SaleTax {
 }
 
 export async function fetchTaxTypes(): Promise<TaxType[]> {
-  const { data, error } = await supabase
-    .from('tax_types')
-    .select('*')
-    .order('created_at');
+  try {
+    const { data, error } = await supabase
+      .from('tax_types')
+      .select('*')
+      .order('created_at', { ascending: true });
 
-  if (error) throw error;
-  return data || [];
+    if (error) {
+      console.error('Error fetching tax types:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in fetchTaxTypes:', error);
+    throw error;
+  }
 }
 
 export async function addTaxType(taxType: Omit<TaxType, 'id'>): Promise<TaxType> {

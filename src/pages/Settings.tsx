@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePOS } from '@/contexts/POSContext';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,13 +22,38 @@ const Settings = () => {
   }, []);
 
   const loadTaxTypes = async () => {
+    setIsLoading(true);
     try {
+      const { data: { session }} = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Error",
+          description: "Please sign in to access settings",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const types = await tax.fetchTaxTypes();
-      setTaxTypes(types);
-    } catch (error) {
+      if (Array.isArray(types)) {
+        setTaxTypes(types);
+        if (types.length > 0) {
+          toast({
+            description: `${types.length} tax type(s) loaded successfully`
+          });
+        } else {
+          toast({
+            title: "Warning",
+            description: "No tax types found. Creating default tax types...",
+            variant: "warning"
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Error loading tax types:', error);
       toast({
         title: "Error",
-        description: "Gagal memuat data pajak",
+        description: error?.message || "Failed to load tax settings. Please check the database connection.",
         variant: "destructive"
       });
     } finally {
