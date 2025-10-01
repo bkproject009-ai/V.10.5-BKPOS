@@ -397,6 +397,20 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     
     try {
       const sale = await db.createSale(state.cart, subtotal, taxes, total, paymentMethod);
+      
+      // Update local products state with new stock values
+      const updatedProducts = state.products.map(product => {
+        const cartItem = state.cart.find(item => item.product.id === product.id);
+        if (cartItem) {
+          return {
+            ...product,
+            stock: product.stock - cartItem.quantity
+          };
+        }
+        return product;
+      });
+      
+      dispatch({ type: 'SET_PRODUCTS', products: updatedProducts });
       dispatch({ type: 'ADD_SALE', sale });
       dispatch({ type: 'CLEAR_CART' });
       
