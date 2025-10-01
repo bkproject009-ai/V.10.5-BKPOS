@@ -1,0 +1,1850 @@
+import { useState, useEffect } from 'react';import { useState, useEffect } from 'react';import { useState, useEffect } from 'react';
+
+import { useNavigate } from 'react-router-dom';
+
+import { useAuth } from '@/contexts/AuthContext';import { useNavigate } from 'react-router-dom';import { useNavigate } from 'react-router-dom';
+
+import { usePOS } from '@/contexts/POSContext';
+
+import { supabase } from '@/lib/supabase';import { useAuth } from '@/contexts/AuthContext';import { useAuth } from '@/contexts/AuthContext';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { Button } from '@/components/ui/button';import { usePOS } from '@/contexts/POSContext';import { usePOS } from '@/contexts/POSContext';
+
+import { Badge } from '@/components/ui/badge';
+
+import { MetricCard } from '@/components/ui/metric-card';import { supabase } from '@/lib/supabase';import { supabase } from '@/lib/supabase';
+
+import {
+
+  Dialog,import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+  DialogContent,
+
+  DialogDescription,import { Button } from '@/components/ui/button';import { Button } from '@/components/ui/button';
+
+  DialogHeader,
+
+  DialogTitle,import { Badge } from '@/components/ui/badge';import { Badge } from '@/components/ui/badge';
+
+  DialogTrigger,
+
+} from '@/components/ui/dialog';import { MetricCard } from '@/components/ui/metric-card';import { MetricCard } from '@/components/ui/metric-card';
+
+import {
+
+  DropdownMenu,import {import {
+
+  DropdownMenuContent,
+
+  DropdownMenuItem,  Dialog,  Dialog,
+
+  DropdownMenuTrigger,
+
+} from "@/components/ui/dropdown-menu";  DialogContent,  DialogContent,
+
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+import {  DialogDescription,  DialogDescription,
+
+  Download,
+
+  Edit,  DialogHeader,  DialogHeader,
+
+  Trash2,
+
+  Eye,  DialogTitle,  DialogTitle,
+
+  TrendingUp,
+
+  DollarSign,  DialogTrigger,  DialogTrigger,
+
+  Package,
+
+  ShoppingCart,} from '@/components/ui/dialog';} from '@/components/ui/dialog';
+
+  CreditCard,
+
+  Receipt,import {import {
+
+  Users,
+
+} from 'lucide-react';  DropdownMenu,  DropdownMenu,
+
+import { toast } from '@/hooks/use-toast';
+
+import type { Sale } from '@/contexts/POSContext';  DropdownMenuContent,  DropdownMenuContent,
+
+
+
+const Reports = () => {  DropdownMenuItem,  DropdownMenuItem,
+
+  const navigate = useNavigate();
+
+  const { session } = useAuth();  DropdownMenuTrigger,  DropdownMenuTrigger,
+
+  const [sales, setSales] = useState<Sale[]>([]);
+
+  const [loading, setLoading] = useState(true);} from "@/components/ui/dropdown-menu";} from "@/components/ui/dropdown-menu";
+
+  
+
+  useEffect(() => {import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+    const init = async () => {
+
+      try {import {import {
+
+        if (!session) {
+
+          throw new Error('No active session');  Download,  Download,
+
+        }
+
+  Edit,  Edit,
+
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError || !currentSession) {  Trash2,  Trash2,
+
+          throw new Error('Invalid session');
+
+        }  Eye,  Eye,
+
+
+
+        await fetchSales();  TrendingUp,  TrendingUp,
+
+      } catch (error) {
+
+        console.error('Session/initialization error:', error);  DollarSign,  DollarSign,
+
+        
+
+        toast({  Package,  Package,
+
+          title: "Authentication Error",
+
+          description: error instanceof Error ? error.message : "Please login again to continue",  ShoppingCart,  ShoppingCart,
+
+          variant: "destructive"
+
+        });  CreditCard,  CreditCard,
+
+
+
+        navigate('/login', { replace: true });  Receipt,  Receipt,
+
+      }
+
+    };  Users,  Users,
+
+
+
+    init();} from 'lucide-react';} from 'lucide-react';
+
+  }, [session, navigate]);
+
+import { toast } from '@/hooks/use-toast';import { toast } from '@/hooks/use-toast';
+
+  const fetchSales = async () => {
+
+    try {import type { Sale } from '@/contexts/POSContext';import type { Sale } from '@/contexts/POSContext';
+
+      setLoading(true);
+
+
+
+      const { data, error } = await supabase
+
+        .from('sales')const Reports = () => {const Reports = () => {
+
+        .select(`
+
+          *,  const navigate = useNavigate();  const navigate = useNavigate();
+
+          sales_taxes(
+
+            *,  const { session } = useAuth();  const { session } = useAuth();
+
+            tax_types(
+
+              *  const [sales, setSales] = useState<Sale[]>([]);  const [sales, setSales] = useState<Sale[]>([]);
+
+            )
+
+          ),  const [loading, setLoading] = useState(true);  const [loading, setLoading] = useState(true);
+
+          sale_items(
+
+            *,    
+
+            product:products(
+
+              id,  useEffect(() => {  useEffect(() => {
+
+              name,
+
+              price,    const init = async () => {    const init = async () => {
+
+              sku
+
+            )      try {      try {
+
+          )
+
+        `)        if (!session) {        if (!session) {
+
+        .order('created_at', { ascending: false });
+
+          throw new Error('No active session');          throw new Error('No active session');
+
+      if (error) {
+
+        switch (error.code) {        }        }
+
+          case 'PGRST301':
+
+          case '401':
+
+            throw new Error('Sesi telah berakhir. Silakan login kembali.');
+
+          case 'PGRST404':        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+
+            throw new Error('Data penjualan tidak ditemukan.');
+
+          default:        if (sessionError || !currentSession) {        if (sessionError || !currentSession) {
+
+            throw new Error(error.message);
+
+        }          throw new Error('Invalid session');          throw new Error('Invalid session');
+
+      }
+
+        }        }
+
+      if (!data) {
+
+        throw new Error('Tidak ada data yang diterima dari server');
+
+      }
+
+        await fetchSales();        await fetchSales();
+
+      setSales(data);
+
+    } catch (error) {      } catch (error) {      } catch (error) {
+
+      console.error('Error fetching sales:', error);
+
+              console.error('Session/initialization error:', error);        console.error('Session/initialization error:', error);
+
+      const errorMessage = error instanceof Error 
+
+        ? error.message                 
+
+        : 'Gagal mengambil data penjualan';
+
+              toast({        toast({
+
+      toast({
+
+        title: 'Error',          title: "Authentication Error",          title: "Authentication Error",
+
+        description: errorMessage,
+
+        variant: 'destructive',          description: error instanceof Error ? error.message : "Please login again to continue",          description: error instanceof Error ? error.message : "Please login again to continue",
+
+      });
+
+          variant: "destructive"          variant: "destructive"
+
+      if (
+
+        error instanceof Error &&         });        });
+
+        (error.message.includes('login') || error.message.includes('sesi'))
+
+      ) {
+
+        navigate('/login', { replace: true });
+
+      }        navigate('/login', { replace: true });        navigate('/login', { replace: true });
+
+
+
+      throw error;      }      }
+
+    } finally {
+
+      setLoading(false);    };    };
+
+    }
+
+  };
+
+
+
+  // Calculate summary data with only enabled taxes    init();    init();
+
+  const totalRevenue = sales.reduce((sum, sale) => {
+
+    // Only include enabled taxes in revenue calculation  }, [session, navigate]);  }, [session, navigate]);
+
+    const taxAmount = (sale.sales_taxes || [])
+
+      .filter(tax => tax.tax_types?.enabled ?? false)
+
+      .reduce((taxSum, tax) => taxSum + (Number(tax.tax_amount) || 0), 0);
+
+      const fetchSales = async () => {  const fetchSales = async () => {
+
+    const subtotal = (sale.sale_items || []).reduce((itemSum, item) => 
+
+      itemSum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);    try {    try {
+
+    
+
+    return sum + subtotal + taxAmount;      setLoading(true);      setLoading(true);
+
+  }, 0);
+
+
+
+  const totalTransactions = sales.length;
+
+  const totalItemsSold = sales.reduce((sum, sale) =>       const { data, error } = await supabase      const { data, error } = await supabase
+
+    sum + (Array.isArray(sale.sale_items) ? sale.sale_items.reduce((itemSum, item) => 
+
+      itemSum + (Number(item.quantity) || 0), 0) : 0), 0);        .from('sales')        .from('sales')
+
+
+
+  // Calculate payment method stats        .select(`        .select(`
+
+  const paymentStats = sales.reduce((acc, sale) => {
+
+    acc[sale.payment_method] = (acc[sale.payment_method] || 0) + 1;          *,          *,
+
+    return acc;
+
+  }, {} as Record<string, number>);          sales_taxes(          sales_taxes(
+
+
+
+  // Calculate today's stats with only enabled taxes            *,            *,
+
+  const todayStats = sales
+
+    .filter(sale => {            tax_types(            tax_types(
+
+      const saleDate = new Date(sale.created_at);
+
+      const today = new Date();              *              *
+
+      return (
+
+        saleDate.getDate() === today.getDate() &&            )            )
+
+        saleDate.getMonth() === today.getMonth() &&
+
+        saleDate.getFullYear() === today.getFullYear()          ),          ),
+
+      );
+
+    })          sale_items(          sale_items(
+
+    .reduce(
+
+      (acc, sale) => {            *,            *,
+
+        // Only include enabled taxes in today's revenue
+
+        const taxAmount = (sale.sales_taxes || [])            product:products(            product:products(
+
+          .filter(tax => tax.tax_types?.enabled ?? false)
+
+          .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);              id,              id,
+
+        
+
+        const subtotal = (sale.sale_items || []).reduce((sum, item) =>               name,              name,
+
+          sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);
+
+                      price,              price,
+
+        acc.revenue += subtotal + taxAmount;
+
+        acc.transactions += 1;              sku              sku
+
+        acc.items += (sale.sale_items || []).reduce(
+
+          (sum, item) => sum + (Number(item.quantity) || 0),            )            )
+
+          0
+
+        );          )          )
+
+        return acc;
+
+      },        `)        `)
+
+      { revenue: 0, transactions: 0, items: 0 }
+
+    );        .order('created_at', { ascending: false });        .order('created_at', { ascending: false });
+
+
+
+  // Format currency helper
+
+  const formatCurrency = (amount: number) => {
+
+    return new Intl.NumberFormat('id-ID', {      if (error) {      if (error) {
+
+      style: 'currency',
+
+      currency: 'IDR',        switch (error.code) {        switch (error.code) {
+
+      minimumFractionDigits: 0,
+
+      maximumFractionDigits: 0          case 'PGRST301':          case 'PGRST301':
+
+    }).format(amount);
+
+  };          case '401':          case '401':
+
+
+
+  // Calculate trends            throw new Error('Sesi telah berakhir. Silakan login kembali.');            throw new Error('Sesi telah berakhir. Silakan login kembali.');
+
+  const getTrendPercentage = (current: number, total: number) => {
+
+    if (total === 0 || current === 0) return 0;          case 'PGRST404':          case 'PGRST404':
+
+    return ((current / total) * 100);
+
+  };            throw new Error('Data penjualan tidak ditemukan.');            throw new Error('Data penjualan tidak ditemukan.');
+
+
+
+  const formatDateToLocale = (date: string) => {          default:          default:
+
+    return new Date(date).toLocaleDateString('id-ID');
+
+  };            throw new Error(error.message);            throw new Error(error.message);
+
+
+
+  // Download functionality for product report        }        }
+
+  const downloadProductReport = () => {
+
+    const csvContent = generateProductCSV(sales);      }      }
+
+    downloadCSV(csvContent, 'ringkasan-per-produk');
+
+  };
+
+
+
+  // Download functionality for summary report      if (!data) {      if (!data) {
+
+  const downloadSummaryReport = () => {
+
+    const csvContent = generateSummaryCSV(sales);        throw new Error('Tidak ada data yang diterima dari server');        throw new Error('Tidak ada data yang diterima dari server');
+
+    downloadCSV(csvContent, 'laporan-per-transaksi');
+
+  };      }      }
+
+
+
+  const downloadCSV = (content: string, filePrefix: string) => {
+
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+
+    const link = document.createElement('a');      setSales(data);      setSales(data);
+
+    const url = URL.createObjectURL(blob);
+
+        } catch (error) {    } catch (error) {
+
+    link.setAttribute('href', url);
+
+    link.setAttribute('download', `${filePrefix}-${new Date().toISOString().split('T')[0]}.csv`);      console.error('Error fetching sales:', error);      console.error('Error fetching sales:', error);
+
+    document.body.appendChild(link);
+
+    link.click();            
+
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);      const errorMessage = error instanceof Error       const errorMessage = error instanceof Error 
+
+  };
+
+        ? error.message         ? error.message 
+
+  const generateSummaryCSV = (sales: Sale[]) => {
+
+    const headers = [        : 'Gagal mengambil data penjualan';        : 'Gagal mengambil data penjualan';
+
+      'Tanggal',
+
+      'No. Invoice',            
+
+      'Nama Produk',
+
+      'Harga Satuan',      toast({      toast({
+
+      'Jumlah',
+
+      'Subtotal',        title: 'Error',        title: 'Error',
+
+      'Pajak',
+
+      'Total',        description: errorMessage,        description: errorMessage,
+
+      'Pembayaran',
+
+      'Kembalian'        variant: 'destructive',        variant: 'destructive',
+
+    ].join(',');
+
+      });      });
+
+    const rows = sales.flatMap(sale => {
+
+      // Only include enabled taxes
+
+      const taxes = (sale.sales_taxes || [])
+
+        .filter(tax => tax.tax_types?.enabled ?? false)      if (      if (
+
+        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
+
+      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);        error instanceof Error &&         error instanceof Error && 
+
+      const taxPerItem = totalItems > 0 ? taxes / totalItems : 0; // Distribute tax evenly across items
+
+        (error.message.includes('login') || error.message.includes('sesi'))        (error.message.includes('login') || error.message.includes('sesi'))
+
+      const payment = Number(sale.payment_amount) || 0;
+
+            ) {      ) {
+
+      return (sale.sale_items || []).map(item => {
+
+        if (!item.product) return null;        navigate('/login', { replace: true });        navigate('/login', { replace: true });
+
+        
+
+        const quantity = Number(item.quantity) || 0;      }      }
+
+        const price = Number(item.price_at_time) || 0;
+
+        const subtotal = price * quantity;
+
+        const itemTax = taxPerItem * quantity;
+
+        const total = subtotal + itemTax;      throw error;      throw error;
+
+
+
+        // Escape product name if it contains commas    } finally {    } finally {
+
+        const escapedName = item.product.name.includes(',') ? `"${item.product.name}"` : item.product.name;
+
+      setLoading(false);      setLoading(false);
+
+        return [
+
+          formatDateToLocale(sale.created_at),    }    }
+
+          sale.invoice_number,
+
+          escapedName,  };  };
+
+          formatCurrency(price),
+
+          quantity,
+
+          formatCurrency(subtotal),
+
+          formatCurrency(itemTax),  // Calculate summary data with only enabled taxes  // Calculate summary data
+
+          formatCurrency(total),
+
+          formatCurrency(payment),  const totalRevenue = sales.reduce((sum, sale) => {  const totalRevenue = sales.reduce((sum, sale) => {
+
+          formatCurrency(payment - total)
+
+        ].join(',');    // Only include enabled taxes in revenue calculation    // Only include enabled taxes in revenue calculation
+
+      });
+
+    }).filter(row => row !== null);    const taxAmount = (sale.sales_taxes || [])    const taxAmount = (sale.sales_taxes || [])
+
+
+
+    return [headers, ...rows].join('\n');      .filter(tax => tax.tax_types?.enabled ?? false)      .filter(tax => tax.tax_types?.enabled ?? false)
+
+  };
+
+      .reduce((taxSum, tax) => taxSum + (Number(tax.tax_amount) || 0), 0);      .reduce((taxSum, tax) => taxSum + (Number(tax.tax_amount) || 0), 0);
+
+  const generateProductCSV = (sales: Sale[]) => {
+
+    // Create a map to aggregate product sales        
+
+    const productMap = new Map<string, { 
+
+      name: string;    const subtotal = (sale.sale_items || []).reduce((itemSum, item) =>     const subtotal = (sale.sale_items || []).reduce((itemSum, item) => 
+
+      productId: string;
+
+      quantity: number;      itemSum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);      itemSum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);
+
+      revenue: number;
+
+      price: number;        
+
+      sku: string | null;
+
+      taxes: number;    return sum + subtotal + taxAmount;    return sum + subtotal + taxAmount;
+
+      subtotal: number;
+
+    }>();  }, 0);  }, 0);
+
+
+
+    sales.forEach(sale => {
+
+      // Only include enabled taxes
+
+      const totalTax = (sale.sales_taxes || [])  const totalTransactions = sales.length;  const totalTransactions = sales.length;
+
+        .filter(tax => tax.tax_types?.enabled ?? false)
+
+        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);  const totalItemsSold = sales.reduce((sum, sale) =>   const totalItemsSold = sales.reduce((sum, sale) => 
+
+      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+      const taxPerItem = totalItems > 0 ? totalTax / totalItems : 0; // Distribute tax evenly across items    sum + (Array.isArray(sale.sale_items) ? sale.sale_items.reduce((itemSum, item) =>     sum + (Array.isArray(sale.sale_items) ? sale.sale_items.reduce((itemSum, item) => 
+
+
+
+      (sale.sale_items || []).forEach(item => {      itemSum + (Number(item.quantity) || 0), 0) : 0), 0);      itemSum + (Number(item.quantity) || 0), 0) : 0), 0);
+
+        if (!item.product_id || !item.product) return;
+
+        
+
+        const productId = item.product_id.toString();
+
+        const existing = productMap.get(productId) || {  // Calculate payment method stats  // Calculate payment method stats
+
+          name: item.product.name,
+
+          productId,  const paymentStats = sales.reduce((acc, sale) => {  const paymentStats = sales.reduce((acc, sale) => {
+
+          quantity: 0,
+
+          revenue: 0,    acc[sale.payment_method] = (acc[sale.payment_method] || 0) + 1;    acc[sale.payment_method] = (acc[sale.payment_method] || 0) + 1;
+
+          price: Number(item.price_at_time) || 0,
+
+          sku: item.product.sku,    return acc;    return acc;
+
+          taxes: 0,
+
+          subtotal: 0  }, {} as Record<string, number>);  }, {} as Record<string, number>);
+
+        };
+
+        
+
+        const quantity = Number(item.quantity) || 0;
+
+        const itemSubtotal = (Number(item.price_at_time) || 0) * quantity;  // Calculate today's stats with only enabled taxes  // Calculate today's stats
+
+        const itemTax = taxPerItem * quantity;
+
+  const todayStats = sales  const todayStats = sales
+
+        existing.quantity += quantity;
+
+        existing.subtotal += itemSubtotal;    .filter(sale => {    .filter(sale => {
+
+        existing.taxes += itemTax;
+
+        existing.revenue = existing.subtotal + existing.taxes;      const saleDate = new Date(sale.created_at);      const saleDate = new Date(sale.created_at);
+
+        
+
+        productMap.set(productId, existing);      const today = new Date();      const today = new Date();
+
+      });
+
+    });      return (      return (
+
+
+
+    const headers = [        saleDate.getDate() === today.getDate() &&        saleDate.getDate() === today.getDate() &&
+
+      'SKU',
+
+      'Nama Produk',        saleDate.getMonth() === today.getMonth() &&        saleDate.getMonth() === today.getMonth() &&
+
+      'Harga Satuan',
+
+      'Jumlah Terjual',        saleDate.getFullYear() === today.getFullYear()        saleDate.getFullYear() === today.getFullYear()
+
+      'Subtotal',
+
+      'Pajak',      );      );
+
+      'Total'
+
+    ].join(',');    })    })
+
+
+
+    const rows = Array.from(productMap.values())    .reduce(    .reduce(
+
+      .sort((a, b) => b.revenue - a.revenue)
+
+      .map(product => {      (acc, sale) => {      (acc, sale) => {
+
+        // Escape komma in product name to prevent CSV format issues
+
+        const escapedName = product.name.includes(',') ? `"${product.name}"` : product.name;        // Only include enabled taxes in today's revenue        // Only include enabled taxes in today's revenue
+
+        
+
+        return [        const taxAmount = (sale.sales_taxes || [])        const taxAmount = (sale.sales_taxes || [])
+
+          product.sku || product.productId,
+
+          escapedName,          .filter(tax => tax.tax_types?.enabled ?? false)          .filter(tax => tax.tax_types?.enabled ?? false)
+
+          formatCurrency(product.price),
+
+          product.quantity,          .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);          .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
+
+          formatCurrency(product.subtotal),
+
+          formatCurrency(product.taxes),                
+
+          formatCurrency(product.revenue)
+
+        ].join(',');        const subtotal = (sale.sale_items || []).reduce((sum, item) =>         const subtotal = (sale.sale_items || []).reduce((sum, item) => 
+
+      });
+
+          sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);          sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);
+
+    return [headers, ...rows].join('\n');
+
+  };                
+
+
+
+  if (loading) {        acc.revenue += subtotal + taxAmount;        acc.revenue += subtotal + taxAmount;
+
+    return (
+
+      <div className="flex items-center justify-center min-h-screen">        acc.transactions += 1;        acc.transactions += 1;
+
+        <div className="flex flex-col items-center gap-2">
+
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>        acc.items += (sale.sale_items || []).reduce(        acc.items += (sale.sale_items || []).reduce(
+
+          <p className="text-sm text-gray-600">Loading sales data...</p>
+
+        </div>          (sum, item) => sum + (Number(item.quantity) || 0),          (sum, item) => sum + (Number(item.quantity) || 0),
+
+      </div>
+
+    );          0          0
+
+  }
+
+        );        );
+
+  return (
+
+    <div className="space-y-6 p-6">        return acc;        return acc;
+
+      {/* Summary Section */}
+
+      <div>      },      },
+
+        <h2 className="text-2xl font-bold mb-4">Ringkasan Laporan</h2>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">      { revenue: 0, transactions: 0, items: 0 }      { revenue: 0, transactions: 0, items: 0 }
+
+          {/* Total Revenue Card */}
+
+          <MetricCard    );    );
+
+            title="Total Pendapatan"
+
+            value={formatCurrency(totalRevenue)}
+
+            icon={<DollarSign />}
+
+            subValue={`Hari ini: ${formatCurrency(todayStats.revenue)}`}  // Format currency helper  // Format currency helper
+
+            trend={todayStats.revenue > 0 ? "up" : undefined}
+
+            trendValue={`${getTrendPercentage(todayStats.revenue, totalRevenue).toFixed(1)}%`}  const formatCurrency = (amount: number) => {  const formatCurrency = (amount: number) => {
+
+          />
+
+    return new Intl.NumberFormat('id-ID', {    return new Intl.NumberFormat('id-ID', {
+
+          {/* Transactions Card */}
+
+          <MetricCard      style: 'currency',      style: 'currency',
+
+            title="Total Transaksi"
+
+            value={totalTransactions}      currency: 'IDR',      currency: 'IDR',
+
+            icon={<ShoppingCart />}
+
+            subValue={`Hari ini: ${todayStats.transactions} transaksi`}      minimumFractionDigits: 0,      minimumFractionDigits: 0,
+
+            trend={todayStats.transactions > 0 ? "up" : undefined}
+
+            trendValue={`${getTrendPercentage(todayStats.transactions, totalTransactions).toFixed(1)}%`}      maximumFractionDigits: 0      maximumFractionDigits: 0
+
+          />
+
+    }).format(amount);    }).format(amount);
+
+          {/* Items Sold Card */}
+
+          <MetricCard  };  };
+
+            title="Total Item Terjual"
+
+            value={totalItemsSold}
+
+            icon={<Package />}
+
+            subValue={`Hari ini: ${todayStats.items} item`}  // Calculate trends  // Calculate trends
+
+            trend={todayStats.items > 0 ? "up" : undefined}
+
+            trendValue={`${getTrendPercentage(todayStats.items, totalItemsSold).toFixed(1)}%`}  const getTrendPercentage = (current: number, total: number) => {  const getTrendPercentage = (current: number, total: number) => {
+
+          />
+
+    if (total === 0 || current === 0) return 0;    if (total === 0 || current === 0) return 0;
+
+          {/* Payment Methods Card */}
+
+          <MetricCard    return ((current / total) * 100);    return ((current / total) * 100);
+
+            title="Metode Pembayaran"
+
+            value={`${paymentStats['cash'] || 0} Tunai`}  };  };
+
+            icon={<CreditCard />}
+
+            subValue={`${paymentStats['card'] || 0} Kartu • ${paymentStats['qris'] || 0} QRIS`}
+
+          />
+
+        </div>  const formatDateToLocale = (date: string) => {  const formatDateToLocale = (date: string) => {
+
+      </div>
+
+    return new Date(date).toLocaleDateString('id-ID');    return new Date(date).toLocaleDateString('id-ID');
+
+      {/* Header with Download Buttons */}
+
+      <div className="flex justify-between items-center mb-6">  };  };
+
+        <h2 className="text-2xl font-bold">Daftar Transaksi</h2>
+
+        <DropdownMenu>
+
+          <DropdownMenuTrigger asChild>
+
+            <Button className="gap-2">  // Download functionality for product report  // Download functionality for summary report
+
+              <Download className="h-4 w-4" />
+
+              Download Laporan  const downloadProductReport = () => {  const downloadSummaryReport = () => {
+
+            </Button>
+
+          </DropdownMenuTrigger>    const csvContent = generateProductCSV(sales);    const csvContent = generateSummaryCSV(sales);
+
+          <DropdownMenuContent align="end">
+
+            <DropdownMenuItem onClick={downloadProductReport}>    downloadCSV(csvContent, 'ringkasan-per-produk');    downloadCSV(csvContent, 'laporan-per-transaksi');
+
+              Ringkasan Per Produk
+
+            </DropdownMenuItem>  };  };
+
+            <DropdownMenuItem onClick={downloadSummaryReport}>
+
+              Laporan Penjualan Per Transaksi
+
+            </DropdownMenuItem>
+
+          </DropdownMenuContent>  // Download functionality for summary report  // Download functionality for product report
+
+        </DropdownMenu>
+
+      </div>  const downloadSummaryReport = () => {  const downloadProductReport = () => {
+
+
+
+      {/* Sales Table */}    const csvContent = generateSummaryCSV(sales);    const csvContent = generateProductCSV(sales);
+
+      <Card>
+
+        <CardContent>    downloadCSV(csvContent, 'laporan-per-transaksi');    downloadCSV(csvContent, 'ringkasan-per-produk');
+
+          {sales.length === 0 ? (
+
+            <div className="text-center py-8">  };  };
+
+              <p className="text-muted-foreground">Tidak ada data penjualan</p>
+
+            </div>
+
+          ) : (
+
+            <div className="relative overflow-x-auto">  const downloadCSV = (content: string, filePrefix: string) => {  const downloadCSV = (content: string, filePrefix: string) => {
+
+              <Table>
+
+                <TableHeader>    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+
+                  <TableRow>
+
+                    <TableHead>ID Transaksi</TableHead>    const link = document.createElement('a');    const link = document.createElement('a');
+
+                    <TableHead>Tanggal</TableHead>
+
+                    <TableHead>Total</TableHead>    const url = URL.createObjectURL(blob);    const url = URL.createObjectURL(blob);
+
+                    <TableHead>Pembayaran</TableHead>
+
+                    <TableHead>Items</TableHead>        
+
+                    <TableHead className="w-[100px]">Aksi</TableHead>
+
+                  </TableRow>    link.setAttribute('href', url);    link.setAttribute('href', url);
+
+                </TableHeader>
+
+                <TableBody>    link.setAttribute('download', `${filePrefix}-${new Date().toISOString().split('T')[0]}.csv`);    link.setAttribute('download', `${filePrefix}-${new Date().toISOString().split('T')[0]}.csv`);
+
+                  {sales.map((sale) => {
+
+                    // Only include enabled taxes in the tax amount    document.body.appendChild(link);    document.body.appendChild(link);
+
+                    const taxAmount = (sale.sales_taxes || [])
+
+                      .filter(tax => tax.tax_types?.enabled ?? false)    link.click();    link.click();
+
+                      .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
+
+    document.body.removeChild(link);    document.body.removeChild(link);
+
+                    const subtotal = (sale.sale_items || []).reduce((sum, item) => 
+
+                      sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);    URL.revokeObjectURL(url);    URL.revokeObjectURL(url);
+
+
+
+                    const total = subtotal + taxAmount;  };  };
+
+
+
+                    return (
+
+                      <TableRow key={sale.id} className="group">
+
+                        <TableCell className="font-medium">{sale.id}</TableCell>  const generateSummaryCSV = (sales: Sale[]) => {  const generateSummaryCSV = (sales: Sale[]) => {
+
+                        <TableCell>
+
+                          {new Date(sale.created_at).toLocaleString('id-ID')}    const headers = [    const headers = [
+
+                        </TableCell>
+
+                        <TableCell>      'Tanggal',      'Tanggal',
+
+                          {formatCurrency(total)}
+
+                        </TableCell>      'No. Invoice',      'No. Invoice',
+
+                        <TableCell>
+
+                          <Badge       'Nama Produk',      'Nama Produk',
+
+                            variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}
+
+                            className="capitalize"      'Harga Satuan',      'Harga Satuan',
+
+                          >
+
+                            {sale.payment_method === 'cash' ? 'Tunai' :       'Jumlah',      'Jumlah',
+
+                             sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}
+
+                          </Badge>      'Subtotal',      'Subtotal',
+
+                        </TableCell>
+
+                        <TableCell>      'Pajak',      'Pajak',
+
+                          {(sale.sale_items || []).length} items
+
+                        </TableCell>      'Total',      'Total',
+
+                        <TableCell>
+
+                          <Dialog>      'Pembayaran',      'Pembayaran',
+
+                            <DialogTrigger asChild>
+
+                              <Button variant="ghost" size="sm">      'Kembalian'      'Kembalian'
+
+                                <Eye className="h-4 w-4" />
+
+                              </Button>    ].join(',');    ].join(',');
+
+                            </DialogTrigger>
+
+                            <DialogContent className="max-w-2xl">
+
+                              <DialogHeader>
+
+                                <DialogTitle>Detail Transaksi #{sale.id}</DialogTitle>    const rows = sales.flatMap(sale => {    const rows = sales.flatMap(sale => {
+
+                                <DialogDescription>
+
+                                  {new Date(sale.created_at).toLocaleString('id-ID')}      // Only include enabled taxes      // Only include enabled taxes
+
+                                </DialogDescription>
+
+                              </DialogHeader>      const taxes = (sale.sales_taxes || [])      const taxes = (sale.sales_taxes || [])
+
+                              <div className="space-y-4">
+
+                                <div className="grid grid-cols-2 gap-4">        .filter(tax => tax.tax_types?.enabled ?? false)        .filter(tax => tax.tax_types?.enabled ?? false)
+
+                                  <Card>
+
+                                    <CardContent className="pt-4">        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
+
+                                      <p className="text-sm font-medium mb-1">Total Transaksi</p>
+
+                                      <p className="text-2xl font-bold">      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+                                        {formatCurrency(total)}
+
+                                      </p>      const taxPerItem = totalItems > 0 ? taxes / totalItems : 0; // Distribute tax evenly across items      const taxPerItem = totalItems > 0 ? taxes / totalItems : 0; // Distribute tax evenly across items
+
+                                    </CardContent>
+
+                                  </Card>
+
+                                  <Card>
+
+                                    <CardContent className="pt-4">      const payment = Number(sale.payment_amount) || 0;      const payment = Number(sale.payment_amount) || 0;
+
+                                      <p className="text-sm font-medium mb-1">Metode Pembayaran</p>
+
+                                      <Badge             
+
+                                        variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}
+
+                                        className="capitalize"      return (sale.sale_items || []).map(item => {      return (sale.sale_items || []).map(item => {
+
+                                      >
+
+                                        {sale.payment_method === 'cash' ? 'Tunai' :         if (!item.product) return null;        if (!item.product) return null;
+
+                                         sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}
+
+                                      </Badge>                
+
+                                    </CardContent>
+
+                                  </Card>        const quantity = Number(item.quantity) || 0;        const quantity = Number(item.quantity) || 0;
+
+                                </div>
+
+                                        const price = Number(item.price_at_time) || 0;        const price = Number(item.price_at_time) || 0;
+
+                                <div>
+
+                                  <h4 className="text-sm font-medium mb-3">Detail Produk</h4>        const subtotal = price * quantity;        const subtotal = price * quantity;
+
+                                  <div className="space-y-2">
+
+                                    {(sale.sale_items || []).map((item, index) => (        const itemTax = taxPerItem * quantity;        const itemTax = taxPerItem * quantity;
+
+                                      <div key={index} className="flex justify-between items-center text-sm bg-muted/50 p-3 rounded">
+
+                                        <div>        const total = subtotal + itemTax;        const total = subtotal + itemTax;
+
+                                          <p className="font-medium">{item.product?.name || `Produk #${item.product_id}`}</p>
+
+                                          <p className="text-xs text-muted-foreground">
+
+                                            {formatCurrency(Number(item.price_at_time))} × {item.quantity}
+
+                                          </p>        // Escape product name if it contains commas        // Escape product name if it contains commas
+
+                                        </div>
+
+                                        <p className="font-medium">        const escapedName = item.product.name.includes(',') ? `"${item.product.name}"` : item.product.name;        const escapedName = item.product.name.includes(',') ? `"${item.product.name}"` : item.product.name;
+
+                                          {formatCurrency(Number(item.price_at_time || 0) * Number(item.quantity || 0))}
+
+                                        </p>
+
+                                      </div>
+
+                                    ))}        return [        return [
+
+                                  </div>
+
+                                </div>          formatDateToLocale(sale.created_at),          formatDateToLocale(sale.created_at),
+
+
+
+                                {Array.isArray(sale.sales_taxes) && sale.sales_taxes.length > 0 &&           sale.invoice_number,          sale.invoice_number,
+
+                                 sale.sales_taxes.some(tax => tax.tax_types?.enabled) && (
+
+                                  <div>          escapedName,          escapedName,
+
+                                    <h4 className="text-sm font-medium mb-3">Rincian Pajak</h4>
+
+                                    <div className="space-y-2">          formatCurrency(price),          formatCurrency(price),
+
+                                      {sale.sales_taxes
+
+                                        .filter(tax => tax.tax_types?.enabled)          quantity,          quantity,
+
+                                        .map((tax, index) => (
+
+                                          <div key={`tax-${index}`} className="flex justify-between text-sm p-2 bg-muted/30 rounded">          formatCurrency(subtotal),          formatCurrency(subtotal),
+
+                                            <span>{tax.tax_types?.name || 'Pajak'} ({tax.tax_types?.rate || 0}%)</span>
+
+                                            <span className="font-medium">          formatCurrency(itemTax),          formatCurrency(itemTax),
+
+                                              {formatCurrency(Number(tax.tax_amount || 0))}
+
+                                            </span>          formatCurrency(total),          formatCurrency(total),
+
+                                          </div>
+
+                                        ))}          formatCurrency(payment),          formatCurrency(payment),
+
+                                    </div>
+
+                                  </div>          formatCurrency(payment - total)          formatCurrency(payment - total)
+
+                                )}
+
+        ].join(',');        ].join(',');
+
+                                <div className="border-t pt-4 space-y-2">
+
+                                  <div className="flex justify-between text-sm">      });      });
+
+                                    <span className="text-muted-foreground">Subtotal</span>
+
+                                    <span>{formatCurrency(subtotal)}</span>    }).filter(row => row !== null);    }).filter(row => row !== null);
+
+                                  </div>
+
+                                  {taxAmount > 0 && (
+
+                                    <div className="flex justify-between text-sm">
+
+                                      <span className="text-muted-foreground">Total Pajak</span>    return [headers, ...rows].join('\n');    return [headers, ...rows].join('\n');
+
+                                      <span>{formatCurrency(taxAmount)}</span>
+
+                                    </div>  };  };
+
+                                  )}
+
+                                  <div className="flex justify-between text-lg font-bold pt-2">
+
+                                    <span>Total</span>
+
+                                    <span>{formatCurrency(total)}</span>  const generateProductCSV = (sales: Sale[]) => {  const generateProductCSV = (sales: Sale[]) => {
+
+                                  </div>
+
+                                </div>    // Create a map to aggregate product sales    // Create a map to aggregate product sales
+
+                              </div>
+
+                            </DialogContent>    const productMap = new Map<string, {     const productMap = new Map<string, { 
+
+                          </Dialog>
+
+                        </TableCell>      name: string;      name: string;
+
+                      </TableRow>
+
+                    );      productId: string;      productId: string;
+
+                  })}
+
+                </TableBody>      quantity: number;      quantity: number;
+
+              </Table>
+
+            </div>      revenue: number;      revenue: number;
+
+          )}
+
+        </CardContent>      price: number;      price: number;
+
+      </Card>
+
+    </div>      sku: string | null;      sku: string | null;
+
+  );
+
+};      taxes: number;      taxes: number;
+
+
+
+export default Reports;      subtotal: number;      subtotal: number;
+
+    }>();    }>();
+
+
+
+    sales.forEach(sale => {    sales.forEach(sale => {
+
+      // Only include enabled taxes      // Only include enabled taxes
+
+      const totalTax = (sale.sales_taxes || [])      const totalTax = (sale.sales_taxes || [])
+
+        .filter(tax => tax.tax_types?.enabled ?? false)        .filter(tax => tax.tax_types?.enabled ?? false)
+
+        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
+
+      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+      const taxPerItem = totalItems > 0 ? totalTax / totalItems : 0; // Distribute tax evenly across items      const taxPerItem = totalItems > 0 ? totalTax / totalItems : 0; // Distribute tax evenly across items
+
+
+
+      (sale.sale_items || []).forEach(item => {      (sale.sale_items || []).forEach(item => {
+
+        if (!item.product_id || !item.product) return;        if (!item.product_id || !item.product) return;
+
+                
+
+        const productId = item.product_id.toString();        const productId = item.product_id.toString();
+
+        const existing = productMap.get(productId) || {        const existing = productMap.get(productId) || {
+
+          name: item.product.name,          name: item.product.name,
+
+          productId,          productId,
+
+          quantity: 0,          quantity: 0,
+
+          revenue: 0,          revenue: 0,
+
+          price: Number(item.price_at_time) || 0,          price: Number(item.price_at_time) || 0,
+
+          sku: item.product.sku,          sku: item.product.sku,
+
+          taxes: 0,          taxes: 0,
+
+          subtotal: 0          subtotal: 0
+
+        };        };
+
+                
+
+        const quantity = Number(item.quantity) || 0;        const quantity = Number(item.quantity) || 0;
+
+        const itemSubtotal = (Number(item.price_at_time) || 0) * quantity;        const itemSubtotal = (Number(item.price_at_time) || 0) * quantity;
+
+        const itemTax = taxPerItem * quantity;        const itemTax = taxPerItem * quantity;
+
+
+
+        existing.quantity += quantity;        existing.quantity += quantity;
+
+        existing.subtotal += itemSubtotal;        existing.subtotal += itemSubtotal;
+
+        existing.taxes += itemTax;        existing.taxes += itemTax;
+
+        existing.revenue = existing.subtotal + existing.taxes;        existing.revenue = existing.subtotal + existing.taxes;
+
+                
+
+        productMap.set(productId, existing);        productMap.set(productId, existing);
+
+      });      });
+
+    });    });
+
+
+
+    const headers = [    const headers = [
+
+      'SKU',      'SKU',
+
+      'Nama Produk',      'Nama Produk',
+
+      'Harga Satuan',      'Harga Satuan',
+
+      'Jumlah Terjual',      'Jumlah Terjual',
+
+      'Subtotal',      'Subtotal',
+
+      'Pajak',      'Pajak',
+
+      'Total'      'Total'
+
+    ].join(',');    ].join(',');
+
+
+
+    const rows = Array.from(productMap.values())    const rows = Array.from(productMap.values())
+
+      .sort((a, b) => b.revenue - a.revenue)      .sort((a, b) => b.revenue - a.revenue)
+
+      .map(product => {      .map(product => {
+
+        // Escape komma in product name to prevent CSV format issues        // Escape komma in product name to prevent CSV format issues
+
+        const escapedName = product.name.includes(',') ? `"${product.name}"` : product.name;        const escapedName = product.name.includes(',') ? `"${product.name}"` : product.name;
+
+                
+
+        return [        return [
+
+          product.sku || product.productId,          product.sku || product.productId,
+
+          escapedName,          escapedName,
+
+          formatCurrency(product.price),          formatCurrency(product.price),
+
+          product.quantity,          product.quantity,
+
+          formatCurrency(product.subtotal),          formatCurrency(product.subtotal),
+
+          formatCurrency(product.taxes),          formatCurrency(product.taxes),
+
+          formatCurrency(product.revenue)          formatCurrency(product.revenue)
+
+        ].join(',');        ].join(',');
+
+      });      });
+
+
+
+    return [headers, ...rows].join('\n');    return [headers, ...rows].join('\n');
+
+  };  };
+
+
+
+  if (loading) {  if (loading) {
+
+    return (    return (
+
+      <div className="flex items-center justify-center min-h-screen">      <div className="flex items-center justify-center min-h-screen">
+
+        <div className="flex flex-col items-center gap-2">        <div className="flex flex-col items-center gap-2">
+
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+
+          <p className="text-sm text-gray-600">Loading sales data...</p>          <p className="text-sm text-gray-600">Loading sales data...</p>
+
+        </div>        </div>
+
+      </div>      </div>
+
+    );    );
+
+  }  }
+
+
+
+  return (  return (
+
+    <div className="space-y-6 p-6">    <div className="space-y-6 p-6">
+
+      {/* Summary Section */}      {/* Summary Section */}
+
+      <div>      <div>
+
+        <h2 className="text-2xl font-bold mb-4">Ringkasan Laporan</h2>        <h2 className="text-2xl font-bold mb-4">Ringkasan Laporan</h2>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
+          {/* Total Revenue Card */}          {/* Total Revenue Card */}
+
+          <MetricCard          <MetricCard
+
+            title="Total Pendapatan"            title="Total Pendapatan"
+
+            value={formatCurrency(totalRevenue)}            value={formatCurrency(totalRevenue)}
+
+            icon={<DollarSign />}            icon={<DollarSign />}
+
+            subValue={`Hari ini: ${formatCurrency(todayStats.revenue)}`}            subValue={`Hari ini: ${formatCurrency(todayStats.revenue)}`}
+
+            trend={todayStats.revenue > 0 ? "up" : undefined}            trend={todayStats.revenue > 0 ? "up" : undefined}
+
+            trendValue={`${getTrendPercentage(todayStats.revenue, totalRevenue).toFixed(1)}%`}            trendValue={`${getTrendPercentage(todayStats.revenue, totalRevenue).toFixed(1)}%`}
+
+          />          />
+
+
+
+          {/* Transactions Card */}          {/* Transactions Card */}
+
+          <MetricCard          <MetricCard
+
+            title="Total Transaksi"            title="Total Transaksi"
+
+            value={totalTransactions}            value={totalTransactions}
+
+            icon={<ShoppingCart />}            icon={<ShoppingCart />}
+
+            subValue={`Hari ini: ${todayStats.transactions} transaksi`}            subValue={`Hari ini: ${todayStats.transactions} transaksi`}
+
+            trend={todayStats.transactions > 0 ? "up" : undefined}            trend={todayStats.transactions > 0 ? "up" : undefined}
+
+            trendValue={`${getTrendPercentage(todayStats.transactions, totalTransactions).toFixed(1)}%`}            trendValue={`${getTrendPercentage(todayStats.transactions, totalTransactions).toFixed(1)}%`}
+
+          />          />
+
+
+
+          {/* Items Sold Card */}          {/* Items Sold Card */}
+
+          <MetricCard          <MetricCard
+
+            title="Total Item Terjual"            title="Total Item Terjual"
+
+            value={totalItemsSold}            value={totalItemsSold}
+
+            icon={<Package />}            icon={<Package />}
+
+            subValue={`Hari ini: ${todayStats.items} item`}            subValue={`Hari ini: ${todayStats.items} item`}
+
+            trend={todayStats.items > 0 ? "up" : undefined}            trend={todayStats.items > 0 ? "up" : undefined}
+
+            trendValue={`${getTrendPercentage(todayStats.items, totalItemsSold).toFixed(1)}%`}            trendValue={`${getTrendPercentage(todayStats.items, totalItemsSold).toFixed(1)}%`}
+
+          />          />
+
+
+
+          {/* Payment Methods Card */}          {/* Payment Methods Card */}
+
+          <MetricCard          <MetricCard
+
+            title="Metode Pembayaran"            title="Metode Pembayaran"
+
+            value={`${paymentStats['cash'] || 0} Tunai`}            value={`${paymentStats['cash'] || 0} Tunai`}
+
+            icon={<CreditCard />}            icon={<CreditCard />}
+
+            subValue={`${paymentStats['card'] || 0} Kartu • ${paymentStats['qris'] || 0} QRIS`}            subValue={`${paymentStats['card'] || 0} Kartu • ${paymentStats['qris'] || 0} QRIS`}
+
+          />          />
+
+        </div>        </div>
+
+      </div>      </div>
+
+
+
+      {/* Header with Download Buttons */}      {/* Header with Download Buttons */}
+
+      <div className="flex justify-between items-center mb-6">      <div className="flex justify-between items-center mb-6">
+
+        <h2 className="text-2xl font-bold">Daftar Transaksi</h2>        <h2 className="text-2xl font-bold">Daftar Transaksi</h2>
+
+        <DropdownMenu>        <DropdownMenu>
+
+          <DropdownMenuTrigger asChild>          <DropdownMenuTrigger asChild>
+
+            <Button className="gap-2">            <Button className="gap-2">
+
+              <Download className="h-4 w-4" />              <Download className="h-4 w-4" />
+
+              Download Laporan              Download Laporan
+
+            </Button>            </Button>
+
+          </DropdownMenuTrigger>          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end">          <DropdownMenuContent align="end">
+
+            <DropdownMenuItem onClick={downloadProductReport}>            <DropdownMenuItem onClick={downloadProductReport}>
+
+              Ringkasan Per Produk              Ringkasan Per Produk
+
+            </DropdownMenuItem>            </DropdownMenuItem>
+
+            <DropdownMenuItem onClick={downloadSummaryReport}>            <DropdownMenuItem onClick={downloadSummaryReport}>
+
+              Laporan Penjualan Per Transaksi              Laporan Penjualan Per Transaksi
+
+            </DropdownMenuItem>            </DropdownMenuItem>
+
+          </DropdownMenuContent>          </DropdownMenuContent>
+
+        </DropdownMenu>        </DropdownMenu>
+
+      </div>      </div>
+
+
+
+      {/* Sales Table */}      {/* Sales Table */}
+
+      <Card>      <Card>
+
+        <CardContent>        <CardContent>
+
+          {sales.length === 0 ? (          {sales.length === 0 ? (
+
+            <div className="text-center py-8">            <div className="text-center py-8">
+
+              <p className="text-muted-foreground">Tidak ada data penjualan</p>              <p className="text-muted-foreground">Tidak ada data penjualan</p>
+
+            </div>            </div>
+
+          ) : (          ) : (
+
+            <div className="relative overflow-x-auto">            <div className="relative overflow-x-auto">
+
+              <Table>              <Table>
+
+                <TableHeader>                <TableHeader>
+
+                  <TableRow>                  <TableRow>
+
+                    <TableHead>ID Transaksi</TableHead>                    <TableHead>ID Transaksi</TableHead>
+
+                    <TableHead>Tanggal</TableHead>                    <TableHead>Tanggal</TableHead>
+
+                    <TableHead>Total</TableHead>                    <TableHead>Total</TableHead>
+
+                    <TableHead>Pembayaran</TableHead>                    <TableHead>Pembayaran</TableHead>
+
+                    <TableHead>Items</TableHead>                    <TableHead>Items</TableHead>
+
+                    <TableHead className="w-[100px]">Aksi</TableHead>                    <TableHead className="w-[100px]">Aksi</TableHead>
+
+                  </TableRow>                  </TableRow>
+
+                </TableHeader>                </TableHeader>
+
+                <TableBody>                <TableBody>
+
+                  {sales.map((sale) => {                  {sales.map((sale) => {
+
+                    // Only include enabled taxes in the tax amount                    // Only include enabled taxes in the tax amount
+
+                    const taxAmount = (sale.sales_taxes || [])                    const taxAmount = (sale.sales_taxes || [])
+
+                      .filter(tax => tax.tax_types?.enabled ?? false)                      .filter(tax => tax.tax_types?.enabled ?? false)
+
+                      .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);                      .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
+
+
+
+                    const subtotal = (sale.sale_items || []).reduce((sum, item) =>                     return (
+
+                      sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);                      <TableRow key={sale.id} className="group">
+
+                        <TableCell className="font-medium">{sale.id}</TableCell>
+
+                    const total = subtotal + taxAmount;                        <TableCell>
+
+                          {new Date(sale.created_at).toLocaleString('id-ID')}
+
+                    return (                        </TableCell>
+
+                      <TableRow key={sale.id} className="group">                        <TableCell>
+
+                        <TableCell className="font-medium">{sale.id}</TableCell>                          {formatCurrency(Number(sale.total) || 0)}
+
+                        <TableCell>                        </TableCell>
+
+                          {new Date(sale.created_at).toLocaleString('id-ID')}                        <TableCell>
+
+                        </TableCell>                          <Badge 
+
+                        <TableCell>                            variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}
+
+                          {formatCurrency(total)}                            className="capitalize"
+
+                        </TableCell>                          >
+
+                        <TableCell>                            {sale.payment_method === 'cash' ? 'Tunai' : 
+
+                          <Badge                              sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}
+
+                            variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}                          </Badge>
+
+                            className="capitalize"                        </TableCell>
+
+                          >                        <TableCell>
+
+                            {sale.payment_method === 'cash' ? 'Tunai' :                           {(sale.sale_items || []).length} items
+
+                             sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}                        </TableCell>
+
+                          </Badge>                        <TableCell>
+
+                        </TableCell>                          <Dialog>
+
+                        <TableCell>                            <DialogTrigger asChild>
+
+                          {(sale.sale_items || []).length} items                              <Button variant="ghost" size="sm">
+
+                        </TableCell>                                <Eye className="h-4 w-4" />
+
+                        <TableCell>                              </Button>
+
+                          <Dialog>                            </DialogTrigger>
+
+                            <DialogTrigger asChild>                            <DialogContent className="max-w-2xl">
+
+                              <Button variant="ghost" size="sm">                              <DialogHeader>
+
+                                <Eye className="h-4 w-4" />                                <DialogTitle>Detail Transaksi #{sale.id}</DialogTitle>
+
+                              </Button>                                <DialogDescription>
+
+                            </DialogTrigger>                                  {new Date(sale.created_at).toLocaleString('id-ID')}
+
+                            <DialogContent className="max-w-2xl">                                </DialogDescription>
+
+                              <DialogHeader>                              </DialogHeader>
+
+                                <DialogTitle>Detail Transaksi #{sale.id}</DialogTitle>                              <div className="space-y-4">
+
+                                <DialogDescription>                                <div className="grid grid-cols-2 gap-4">
+
+                                  {new Date(sale.created_at).toLocaleString('id-ID')}                                  <Card>
+
+                                </DialogDescription>                                    <CardContent className="pt-4">
+
+                              </DialogHeader>                                      <p className="text-sm font-medium mb-1">Total Transaksi</p>
+
+                              <div className="space-y-4">                                      <p className="text-2xl font-bold">
+
+                                <div className="grid grid-cols-2 gap-4">                                        {formatCurrency(Number(sale.total) || 0)}
+
+                                  <Card>                                      </p>
+
+                                    <CardContent className="pt-4">                                    </CardContent>
+
+                                      <p className="text-sm font-medium mb-1">Total Transaksi</p>                                  </Card>
+
+                                      <p className="text-2xl font-bold">                                  <Card>
+
+                                        {formatCurrency(total)}                                    <CardContent className="pt-4">
+
+                                      </p>                                      <p className="text-sm font-medium mb-1">Metode Pembayaran</p>
+
+                                    </CardContent>                                      <Badge 
+
+                                  </Card>                                        variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}
+
+                                  <Card>                                        className="capitalize"
+
+                                    <CardContent className="pt-4">                                      >
+
+                                      <p className="text-sm font-medium mb-1">Metode Pembayaran</p>                                        {sale.payment_method === 'cash' ? 'Tunai' : 
+
+                                      <Badge                                          sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}
+
+                                        variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}                                      </Badge>
+
+                                        className="capitalize"                                    </CardContent>
+
+                                      >                                  </Card>
+
+                                        {sale.payment_method === 'cash' ? 'Tunai' :                                 </div>
+
+                                         sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}                                
+
+                                      </Badge>                                <div>
+
+                                    </CardContent>                                  <h4 className="text-sm font-medium mb-3">Detail Produk</h4>
+
+                                  </Card>                                  <div className="space-y-2">
+
+                                </div>                                    {(sale.sale_items || []).map((item, index) => (
+
+                                                                      <div key={index} className="flex justify-between items-center text-sm bg-muted/50 p-3 rounded">
+
+                                <div>                                        <div>
+
+                                  <h4 className="text-sm font-medium mb-3">Detail Produk</h4>                                          <p className="font-medium">{item.product?.name || `Produk #${item.product_id}`}</p>
+
+                                  <div className="space-y-2">                                          <p className="text-xs text-muted-foreground">
+
+                                    {(sale.sale_items || []).map((item, index) => (                                            {formatCurrency(Number(item.price_at_time))} × {item.quantity}
+
+                                      <div key={index} className="flex justify-between items-center text-sm bg-muted/50 p-3 rounded">                                          </p>
+
+                                        <div>                                        </div>
+
+                                          <p className="font-medium">{item.product?.name || `Produk #${item.product_id}`}</p>                                        <p className="font-medium">
+
+                                          <p className="text-xs text-muted-foreground">                                          {formatCurrency(Number(item.price_at_time || 0) * Number(item.quantity || 0))}
+
+                                            {formatCurrency(Number(item.price_at_time))} × {item.quantity}                                        </p>
+
+                                          </p>                                      </div>
+
+                                        </div>                                    ))}
+
+                                        <p className="font-medium">                                  </div>
+
+                                          {formatCurrency(Number(item.price_at_time || 0) * Number(item.quantity || 0))}                                </div>
+
+                                        </p>
+
+                                      </div>                                {Array.isArray(sale.sales_taxes) && sale.sales_taxes.length > 0 && 
+
+                                    ))}                                 sale.sales_taxes.some(tax => tax.tax_types?.enabled) && (
+
+                                  </div>                                  <div>
+
+                                </div>                                    <h4 className="text-sm font-medium mb-3">Rincian Pajak</h4>
+
+                                    <div className="space-y-2">
+
+                                {Array.isArray(sale.sales_taxes) && sale.sales_taxes.length > 0 &&                                       {sale.sales_taxes
+
+                                 sale.sales_taxes.some(tax => tax.tax_types?.enabled) && (                                        .filter(tax => tax.tax_types?.enabled)
+
+                                  <div>                                        .map((tax, index) => (
+
+                                    <h4 className="text-sm font-medium mb-3">Rincian Pajak</h4>                                          <div key={`tax-${index}`} className="flex justify-between text-sm p-2 bg-muted/30 rounded">
+
+                                    <div className="space-y-2">                                            <span>{tax.tax_types?.name || 'Pajak'} ({tax.tax_types?.rate || 0}%)</span>
+
+                                      {sale.sales_taxes                                            <span className="font-medium">
+
+                                        .filter(tax => tax.tax_types?.enabled)                                              {formatCurrency(Number(tax.tax_amount || 0))}
+
+                                        .map((tax, index) => (                                            </span>
+
+                                          <div key={`tax-${index}`} className="flex justify-between text-sm p-2 bg-muted/30 rounded">                                          </div>
+
+                                            <span>{tax.tax_types?.name || 'Pajak'} ({tax.tax_types?.rate || 0}%)</span>                                        ))}
+
+                                            <span className="font-medium">                                    </div>
+
+                                              {formatCurrency(Number(tax.tax_amount || 0))}                                  </div>
+
+                                            </span>                                )}
+
+                                          </div>
+
+                                        ))}                                <div className="border-t pt-4 space-y-2">
+
+                                    </div>                                  <div className="flex justify-between text-sm">
+
+                                  </div>                                    <span className="text-muted-foreground">Subtotal</span>
+
+                                )}                                    <span>{formatCurrency(Number(sale.subtotal || 0))}</span>
+
+                                  </div>
+
+                                <div className="border-t pt-4 space-y-2">                                  {taxAmount > 0 && (
+
+                                  <div className="flex justify-between text-sm">                                    <div className="flex justify-between text-sm">
+
+                                    <span className="text-muted-foreground">Subtotal</span>                                      <span className="text-muted-foreground">Total Pajak</span>
+
+                                    <span>{formatCurrency(subtotal)}</span>                                      <span>{formatCurrency(taxAmount)}</span>
+
+                                  </div>                                    </div>
+
+                                  {taxAmount > 0 && (                                  )}
+
+                                    <div className="flex justify-between text-sm">                                  <div className="flex justify-between text-lg font-bold pt-2">
+
+                                      <span className="text-muted-foreground">Total Pajak</span>                                    <span>Total</span>
+
+                                      <span>{formatCurrency(taxAmount)}</span>                                    <span>{formatCurrency(Number(sale.total) || 0)}</span>
+
+                                    </div>                                  </div>
+
+                                  )}                                </div>
+
+                                  <div className="flex justify-between text-lg font-bold pt-2">                              </div>
+
+                                    <span>Total</span>                            </DialogContent>
+
+                                    <span>{formatCurrency(total)}</span>                          </Dialog>
+
+                                  </div>                        </TableCell>
+
+                                </div>                      </TableRow>
+
+                              </div>                    );
+
+                            </DialogContent>                  })}
+
+                          </Dialog>                </TableBody>
+
+                        </TableCell>              </Table>
+
+                      </TableRow>            </div>
+
+                    );          )}
+
+                  })}        </CardContent>
+
+                </TableBody>      </Card>
+
+              </Table>    </div>
+
+            </div>  );
+
+          )}};
+
+        </CardContent>
+
+      </Card>export default Reports;
+    </div>
+  );
+};
+
+export default Reports;

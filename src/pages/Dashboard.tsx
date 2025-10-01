@@ -25,8 +25,8 @@ const Dashboard = () => {
   const productSales = new Map();
   if (Array.isArray(state.sales)) {
     state.sales.forEach(sale => {
-      if (Array.isArray(sale.items)) {
-        sale.items.forEach(item => {
+      if (Array.isArray(sale.sale_items)) {
+        sale.sale_items.forEach(item => {
           if (item?.product_id) {
             const current = productSales.get(item.product_id) || 0;
             const quantity = Number(item.quantity) || 0;
@@ -223,19 +223,19 @@ const Dashboard = () => {
             </p>
           ) : (
             <div className="space-y-3">
-              {state.sales.slice(-5).reverse().map(sale => (
-                <div key={sale.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 p-3 border border-border rounded-lg">
+              {(state.sales || []).slice(-5).reverse().map(sale => (
+                <div key={sale?.id || 'unknown'} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 p-3 border border-border rounded-lg">
                   <div className="min-w-0">
                     <div className="flex items-center justify-between sm:justify-start gap-2">
                       <p className="font-medium text-sm sm:text-base text-foreground truncate">
-                        Transaksi #{sale.id.slice(-6)}
+                        Transaksi #{(sale?.id || '').slice(-6)}
                       </p>
                       <Badge variant="outline" className="capitalize text-xs shrink-0 sm:hidden">
-                        {sale.payment_method}
+                        {sale?.payment_method}
                       </Badge>
                     </div>
                     <p className="text-xs sm:text-sm text-muted-foreground">
-                      {new Date(sale.created_at).toLocaleDateString('id-ID')} • {sale.items.length} produk
+                                            {new Date(sale?.created_at || '').toLocaleDateString('id-ID')} • {(sale?.sale_items || []).length} produk
                     </p>
                   </div>
                   <div className="flex items-center justify-between sm:text-right gap-2">
