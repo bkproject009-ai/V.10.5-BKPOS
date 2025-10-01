@@ -74,16 +74,39 @@ const Products = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.price || !formData.stock || !formData.category || !formData.sku) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive"
-      });
-      return;
-    }
+      const validationErrors = [];
+      if (!formData.name) validationErrors.push('Nama Produk');
+      if (!formData.price) validationErrors.push('Harga');
+      if (!formData.stock) validationErrors.push('Stok');
+      if (!formData.category) validationErrors.push('Kategori');
+      if (!formData.sku) validationErrors.push('SKU');
 
-    const productData = {
+      if (validationErrors.length > 0) {
+        toast({
+          title: "Data Tidak Lengkap",
+          description: `Mohon lengkapi field berikut: ${validationErrors.join(', ')}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (parseFloat(formData.price) <= 0) {
+        toast({
+          title: "Harga Tidak Valid",
+          description: "Harga produk harus lebih besar dari 0",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (parseInt(formData.stock) < 0) {
+        toast({
+          title: "Stok Tidak Valid",
+          description: "Stok tidak boleh bernilai negatif",
+          variant: "destructive"
+        });
+        return;
+      }    const productData = {
       name: formData.name,
       price: parseFloat(formData.price),
       stock: parseInt(formData.stock),
@@ -133,8 +156,8 @@ const Products = () => {
     } catch (error) {
       if (error.code === '23503') { // Foreign key violation
         toast({
-          title: "Gagal Menghapus",
-          description: "Produk ini tidak dapat dihapus karena masih ada transaksi penjualan yang terkait.",
+          title: "Produk Tidak Dapat Dihapus",
+          description: `Produk '${product.name}' tidak dapat dihapus karena masih memiliki riwayat transaksi penjualan. Pertimbangkan untuk mengarsipkan produk ini sebagai gantinya.`,
           variant: "destructive"
         });
       } else {
@@ -310,10 +333,18 @@ const Products = () => {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Hapus Produk</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Apakah Anda yakin ingin menghapus {product.name}? 
-                          Produk yang memiliki riwayat penjualan tidak dapat dihapus.
+                        <AlertDialogTitle>Konfirmasi Penghapusan Produk</AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-2">
+                          <p>Anda akan menghapus produk berikut:</p>
+                          <div className="font-medium">
+                            <p>Nama: {product.name}</p>
+                            <p>SKU: {product.sku}</p>
+                            <p>Stok: {product.stock} unit</p>
+                          </div>
+                          <p className="text-red-500">
+                            PERHATIAN: Produk yang memiliki riwayat transaksi penjualan tidak dapat dihapus 
+                            untuk menjaga integritas data laporan penjualan.
+                          </p>
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -341,13 +372,16 @@ const Products = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     {product.stock < 10 && (
-                      <AlertTriangle className="h-4 w-4 text-warning" />
+                      <div className="flex items-center gap-1">
+                        <AlertTriangle className="h-4 w-4 text-warning" />
+                        <span className="text-xs text-warning">Stok Menipis</span>
+                      </div>
                     )}
                     <Badge 
                       variant={product.stock < 10 ? "destructive" : "default"}
                       className={product.stock < 10 ? "bg-warning text-warning-foreground" : ""}
                     >
-                      {product.stock} pcs
+                      {product.stock === 0 ? "Stok Habis" : `${product.stock} unit tersisa`}
                     </Badge>
                   </div>
                 </div>

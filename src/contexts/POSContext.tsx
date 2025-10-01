@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import * as db from '@/lib/db';
+import {
+  calculateSubtotal,
+  calculateTaxAmount,
+  calculateTotal,
+  formatToRupiah
+} from '@/lib/calculations';
 
 export interface Product {
   id: string;
@@ -336,8 +342,8 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       } catch (error) {
         dispatch({ type: 'SET_ERROR', error: (error as Error).message });
         toast({
-          title: "Error",
-          description: "Gagal memuat data",
+          title: "Gagal Memuat Data",
+          description: `Terjadi kesalahan saat memuat data: ${(error as Error).message}. Silakan coba lagi atau hubungi administrator jika masalah berlanjut.`,
           variant: "destructive"
         });
       } finally {
@@ -358,8 +364,8 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Gagal menambahkan produk",
+        title: "Gagal Menambahkan Produk",
+        description: "Terjadi kesalahan saat menambahkan produk. Pastikan semua data telah diisi dengan benar dan tidak ada SKU yang duplikat.",
         variant: "destructive"
       });
       throw error;
@@ -376,8 +382,8 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Gagal memperbarui produk",
+        title: "Gagal Memperbarui Produk",
+        description: "Terjadi kesalahan saat memperbarui produk. Pastikan data valid dan produk masih tersedia.",
         variant: "destructive"
       });
       throw error;
@@ -422,6 +428,30 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     const { subtotal, taxes, total } = calculateTotals();
     
     try {
+      // Validasi total
+      if (total <= 0) {
+        throw new Error('Total transaksi tidak valid');
+      }
+      // Validasi keranjang
+      if (state.cart.length === 0) {
+        throw new Error("Keranjang belanja masih kosong. Silakan tambahkan produk terlebih dahulu.");
+      }
+
+      // Validasi stok
+      const stockErrors = state.cart.filter(item => {
+        const currentProduct = state.products.find(p => p.id === item.product.id);
+        return currentProduct && item.quantity > currentProduct.stock;
+      });
+
+      if (stockErrors.length > 0) {
+        const errorProducts = stockErrors.map(item => {
+          const currentStock = state.products.find(p => p.id === item.product.id)?.stock || 0;
+          return `${item.product.name} (Stok tersisa: ${currentStock}, Permintaan: ${item.quantity})`;
+        }).join('\n');
+        
+        throw new Error(`Stok tidak mencukupi untuk produk berikut:\n${errorProducts}`);
+      }
+
       const sale = await db.createSale(state.cart, subtotal, taxes, total, paymentMethod);
       
       // Update local products state with new stock values
@@ -439,6 +469,17 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       dispatch({ type: 'SET_PRODUCTS', products: updatedProducts });
       dispatch({ type: 'ADD_SALE', sale });
       dispatch({ type: 'CLEAR_CART' });
+
+      const paymentMethods = {
+        cash: 'Tunai',
+        card: 'Kartu',
+        qris: 'QRIS'
+      };
+
+      toast({
+        title: "Transaksi Berhasil",
+        description: `Pembayaran via ${paymentMethods[paymentMethod]} sebesar Rp${total.toLocaleString('id-ID')} telah selesai.\nStruk akan dicetak otomatis.`,
+      });
       
       // Update local products stock
       state.cart.forEach(item => {

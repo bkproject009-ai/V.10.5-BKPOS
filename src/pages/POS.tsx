@@ -66,15 +66,29 @@ const POS = () => {
   };
 
   const [lastPaymentMethod, setLastPaymentMethod] = useState<'cash' | 'qris'>('cash');
+  const [lastSaleTotal, setLastSaleTotal] = useState<{
+    subtotal: number;
+    tax: number;
+    total: number;
+  } | null>(null);
 
   const handleCheckout = async (paymentMethod: 'cash' | 'qris') => {
     if (state.cart.length === 0) return;
     
     try {
-      await completeSale(paymentMethod);
+      // Calculate final totals before completing sale
+      const finalTotals = calculateTotals();
+      const sale = await completeSale(paymentMethod);
       setLastPaymentMethod(paymentMethod);
       setIsCheckoutOpen(false);
       setShowReceipt(true);
+      
+      // Store the calculated values for receipt
+      setLastSaleTotal({
+        subtotal: finalTotals.subtotal,
+        tax: finalTotals.taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
+        total: finalTotals.total
+      });
     } catch (error) {
       console.error('Failed to complete sale:', error);
       // Todo: Show error toast
@@ -265,9 +279,9 @@ const POS = () => {
           <div ref={receiptRef}>
             <Receipt 
               items={state.cart} 
-              subtotal={subtotal}
-              tax={taxes.reduce((sum, tax) => sum + tax.taxAmount, 0)}
-              total={total}
+              subtotal={lastSaleTotal?.subtotal || 0}
+              tax={lastSaleTotal?.tax || 0}
+              total={lastSaleTotal?.total || 0}
               paymentMethod={lastPaymentMethod}
               date={new Date()}
             />

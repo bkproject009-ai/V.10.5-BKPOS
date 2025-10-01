@@ -1,5 +1,6 @@
 import { CartItem } from "@/contexts/POSContext";
 import { format } from "date-fns";
+import { calculateItemTotal, formatToRupiah } from "@/lib/calculations";
 import { 
   Card, 
   CardContent, 
@@ -70,11 +71,11 @@ export function Receipt({
                 <div className="flex justify-between">
                   <span>{item.product.name}</span>
                   <span>
-                    {new Intl.NumberFormat('id-ID').format(item.product.price)}
+                    {formatToRupiah(calculateItemTotal(item.product.price, item.quantity))}
                   </span>
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  {item.quantity} x @{new Intl.NumberFormat('id-ID').format(item.product.price)}
+                  {item.quantity} x @{formatToRupiah(item.product.price)}
                 </div>
               </div>
             ))}
@@ -86,15 +87,15 @@ export function Receipt({
           <div className="space-y-1 text-sm">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span>Rp {new Intl.NumberFormat('id-ID').format(subtotal)}</span>
+              <span>{formatToRupiah(subtotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Tax (11%)</span>
-              <span>Rp {new Intl.NumberFormat('id-ID').format(tax)}</span>
+              <span>Pajak</span>
+              <span>{formatToRupiah(tax)}</span>
             </div>
             <div className="flex justify-between font-bold">
               <span>Total</span>
-              <span>Rp {new Intl.NumberFormat('id-ID').format(total)}</span>
+              <span>{formatToRupiah(total)}</span>
             </div>
           </div>
 
