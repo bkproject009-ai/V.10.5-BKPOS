@@ -1,17 +1,42 @@
+import { useRef } from 'react';
 import { usePOS } from '@/contexts/POSContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   DollarSign, 
   TrendingUp, 
   TrendingDown, 
   AlertTriangle,
   Package,
-  ShoppingCart
+  ShoppingCart,
+  Download
 } from 'lucide-react';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
 const Dashboard = () => {
   const { state } = usePOS();
+  const dashboardRef = useRef<HTMLDivElement>(null);
+
+  const downloadAsPDF = async () => {
+    if (!dashboardRef.current) return;
+
+    const element = dashboardRef.current;
+    const opt = {
+      margin: 1,
+      filename: `dashboard-report-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      await html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    }
+  };
 
   // Calculate analytics
   const totalRevenue = Array.isArray(state.sales) ? state.sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0) : 0;
@@ -87,12 +112,18 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 md:p-8">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dasbor</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Ringkasan operasional toko Anda</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dasbor</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Ringkasan operasional toko Anda</p>
+        </div>
+        <Button onClick={downloadAsPDF} className="gap-2">
+          <Download className="h-4 w-4" />
+          Download PDF
+        </Button>
       </div>
-
-      {/* Stats Grid */}
+      <div className="space-y-6" ref={dashboardRef}>
+        {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -252,6 +283,7 @@ const Dashboard = () => {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
