@@ -13,6 +13,7 @@ import { DesktopCart } from '@/components/ui/desktop-cart';
 import { 
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -195,6 +196,7 @@ const POS = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Selesaikan Pembayaran</DialogTitle>
+            <DialogDescription>Pilih metode pembayaran untuk menyelesaikan transaksi ini.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-muted rounded-lg">
@@ -258,6 +260,7 @@ const POS = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Struk Pembayaran</DialogTitle>
+            <DialogDescription>Detail transaksi dan bukti pembayaran.</DialogDescription>
           </DialogHeader>
           <div ref={receiptRef}>
             <Receipt 

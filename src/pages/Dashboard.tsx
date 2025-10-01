@@ -1,4 +1,6 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { DashboardPDF } from '@/components/ui/dashboard-pdf';
 import { usePOS } from '@/contexts/POSContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,29 +14,62 @@ import {
   ShoppingCart,
   Download
 } from 'lucide-react';
-// @ts-ignore
 import html2pdf from 'html2pdf.js';
 
 const Dashboard = () => {
   const { state } = usePOS();
   const dashboardRef = useRef<HTMLDivElement>(null);
 
+  const [isPrinting, setIsPrinting] = useState(false);
+
   const downloadAsPDF = async () => {
-    if (!dashboardRef.current) return;
+    setIsPrinting(true);
+    const pdfContent = document.createElement('div');
+    pdfContent.style.width = '297mm'; // A4 width in landscape
+    pdfContent.style.padding = '15mm';
+    
+    const root = document.createElement('div');
+    root.style.width = '100%';
+    root.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    
+    // Render the PDF component
+    root.innerHTML = `<div id="pdf-content"></div>`;
+    pdfContent.appendChild(root);
+    document.body.appendChild(pdfContent);
 
-    const element = dashboardRef.current;
-    const opt = {
-      margin: 1,
-      filename: `dashboard-report-${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-    };
+    // Use React to render the PDF content
+    const container = document.getElementById('pdf-content');
+    if (container) {
+      const element = <DashboardPDF sales={state.sales} products={state.products} />;
+      const root = createRoot(container);
+      await root.render(element);
 
-    try {
-      await html2pdf().set(opt).from(element).save();
-    } catch (error) {
-      console.error('Error generating PDF:', error);
+      const opt = {
+        margin: [15, 15, 15, 15] as [number, number, number, number], // top, right, bottom, left
+        filename: `laporan-toko-${new Date().toLocaleDateString('id-ID')}.pdf`,
+        image: { type: 'jpeg' as const, quality: 1 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          logging: false
+        },
+        jsPDF: { 
+          unit: 'mm', 
+          format: 'a4', 
+          orientation: 'landscape' as const,
+          compress: true,
+          hotfixes: ['px_scaling']
+        }
+      };
+
+      try {
+        await html2pdf().set(opt).from(pdfContent).save();
+      } catch (error) {
+        console.error('Error generating PDF:', error);
+      } finally {
+        document.body.removeChild(pdfContent);
+        setIsPrinting(false);
+      }
     }
   };
 

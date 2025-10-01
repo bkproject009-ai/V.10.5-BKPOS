@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import {
   Card,
   CardContent,
@@ -20,23 +21,22 @@ import { User, Mail, Shield } from "lucide-react";
 export default function Profile() {
   const { user } = useAuth();
   
-  // Fungsi untuk mengambil data user dari API
+  // Fungsi untuk mengambil data user dari API menggunakan Supabase client
   const getUserData = async () => {
     if (!user) return;
     
     try {
-      const response = await fetch(
-        `https://ddcmuhwpanbatixdfpla.supabase.co/rest/v1/users?select=*&id=eq.${user.id}`,
-        {
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${user.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+        
+      if (error) {
+        console.error('Error fetching user data:', error);
+        return;
+      }
       
-      const data = await response.json();
       console.log('User Data:', data);
     } catch (error) {
       console.error('Error fetching user data:', error);

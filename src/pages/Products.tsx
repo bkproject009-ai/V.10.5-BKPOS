@@ -12,6 +12,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { 
   Plus, 
   Edit2, 
@@ -112,13 +123,27 @@ const Products = () => {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (product: Product) => {
-    if (window.confirm(`Are you sure you want to delete ${product.name}?`)) {
-      deleteProduct(product.id);
+  const handleDelete = async (product: Product) => {
+    try {
+      await deleteProduct(product.id);
       toast({
-        title: "Product Deleted",
-        description: `${product.name} has been removed from inventory`,
+        title: "Produk Dihapus",
+        description: `${product.name} telah dihapus dari inventaris`,
       });
+    } catch (error) {
+      if (error.code === '23503') { // Foreign key violation
+        toast({
+          title: "Gagal Menghapus",
+          description: "Produk ini tidak dapat dihapus karena masih ada transaksi penjualan yang terkait.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Terjadi kesalahan saat menghapus produk",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -277,13 +302,26 @@ const Products = () => {
                   >
                     <Edit2 className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(product)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Hapus Produk</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Apakah Anda yakin ingin menghapus {product.name}? 
+                          Produk yang memiliki riwayat penjualan tidak dapat dihapus.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(product)}>Hapus</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             </CardHeader>

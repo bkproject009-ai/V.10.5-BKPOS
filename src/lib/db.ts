@@ -36,6 +36,22 @@ export async function updateProduct(id: string, product: Partial<Product>): Prom
 }
 
 export async function deleteProduct(id: string): Promise<void> {
+  // Check if product has any sales records
+  const { data: saleItems, error: checkError } = await supabase
+    .from('sale_items')
+    .select('id')
+    .eq('product_id', id)
+    .limit(1);
+    
+  if (checkError) throw checkError;
+  
+  if (saleItems && saleItems.length > 0) {
+    throw {
+      code: '23503',
+      message: 'Product has associated sales records'
+    };
+  }
+
   const { error } = await supabase
     .from('products')
     .delete()
@@ -53,14 +69,21 @@ export async function createSale(
   paymentMethod: string
 ): Promise<Sale> {
   // Start a transaction
+  // Get current user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error('User must be logged in to create a sale');
+
+  // First, create the sale record
   const { data: saleData, error: saleError } = await supabase
     .from('sales')
     .insert([{
-      items,
       subtotal,
+      tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
       total,
       payment_method: paymentMethod,
-      date: new Date().toISOString()
+      cashier_id: user.id,
+      status: 'completed'
     }])
     .select()
     .single();
@@ -91,6 +114,20 @@ export async function createSale(
 
     if (updateError) throw updateError;
   }
+
+  // Create sale items records
+  const saleItems = items.map(item => ({
+    sale_id: saleData.id,
+    product_id: item.product.id,
+    quantity: item.quantity,
+    price_at_time: item.product.price
+  }));
+
+  const { error: itemsError } = await supabase
+    .from('sale_items')
+    .insert(saleItems);
+
+  if (itemsError) throw itemsError;
 
   // Create tax records if there are any
   if (taxes.length > 0) {

@@ -48,29 +48,13 @@ export interface Sale {
   subtotal: number;
   tax_amount: number;
   payment_method: 'cash' | 'card' | 'qris';
+  cashier_id: string;
+  status: 'completed' | 'cancelled' | 'pending';
   sale_items: SaleItem[];
   sales_taxes: SaleTax[];
 }
 
-export interface Sale {
-  id: string;
-  created_at: string;
-  subtotal: number;
-  total: number;
-  payment_method: 'cash' | 'card' | 'qris';
-  cashier_id: string;
-  items: SaleItem[];
-  sales_taxes: Array<{
-    tax_type_id: string;
-    tax_amount: number;
-    tax_types?: {
-      name: string;
-      rate: number;
-    };
-  }>;
-}
 
-import { TaxType } from '@/lib/tax';
 
 export interface TaxSettings {
   taxTypes: TaxType[];
