@@ -14,6 +14,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import NavigationCashier from './NavigationCashier';
 import {
   Sheet,
   SheetContent,
@@ -26,9 +27,17 @@ import {
 const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  
+  // Check if user is cashier
+  const isCashier = user?.user_metadata?.role === 'cashier';
+  
+  // Render cashier navigation if user is cashier
+  if (isCashier) {
+    return <NavigationCashier />;
+  }
 
   const handleLogout = async () => {
     try {

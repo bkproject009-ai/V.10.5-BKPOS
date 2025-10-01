@@ -44,16 +44,6 @@ const App = () => (
                   <Route path="/signup" element={<SignUp />} />
                   <Route path="/email-confirmation" element={<EmailConfirmation />} />
                   
-                  {/* Cashier-only POS front page, no navigation */}
-                  <Route 
-                    path="/kasir" 
-                    element={
-                      <ProtectedRoute>
-                        <KasirFront />
-                      </ProtectedRoute>
-                    } 
-                  />
-
                   {/* Main app with navigation */}
                   <Route
                     path="/"
@@ -68,12 +58,31 @@ const App = () => (
                       </ProtectedRoute>
                     }
                   >
-                    <Route index element={<Dashboard />} />
+                    {/* Admin/Manager only routes */}
+                    <Route path="/" element={
+                      <ProtectedRoute allowedRoles={['admin', 'manager']}>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="reports" element={
+                      <ProtectedRoute allowedRoles={['admin', 'manager']}>
+                        <Reports />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Routes accessible by all roles */}
                     <Route path="products" element={<Products />} />
                     <Route path="pos" element={<POS />} />
-                    <Route path="reports" element={<Reports />} />
                     <Route path="settings" element={<Settings />} />
                     <Route path="profile" element={<Profile />} />
+                    
+                    {/* All authenticated users can access these routes */}
+                    <Route path="/" element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    } />
+                    
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Route>

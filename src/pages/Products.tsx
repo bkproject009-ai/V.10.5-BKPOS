@@ -1,10 +1,28 @@
 import { useState } from 'react';
 import { usePOS, Product } from '@/contexts/POSContext';
+import { cn } from '@/lib/utils';
+import { Minus, Plus, History } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface StockAdjustment {
+  type: 'increase' | 'decrease';
+  reason: string;
+  quantity: number;
+  note?: string;
+}
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import ProductPermissions from '@/components/ProductPermissions';
 import { 
   Dialog,
   DialogContent,
@@ -34,113 +52,51 @@ import {
 import { toast } from '@/hooks/use-toast';
 
 const Products = () => {
-  const { state, addProduct, updateProduct, deleteProduct } = usePOS();
+  const posContext = usePOS();
+  const { state, deleteProduct, addProduct, updateProduct } = posContext;
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isStockAdjustmentOpen, setIsStockAdjustmentOpen] = useState(false);
+  const [stockAdjustment, setStockAdjustment] = useState<StockAdjustment>({
+    type: 'increase',
+    reason: '',
+    quantity: 1,
+    note: ''
+  });
+  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    price: '',
-    stock: '',
-    category: '',
     sku: '',
+    price: 0,
+    stock: 0,
+    category: '',
     description: ''
   });
 
-  // Filter products
-  const filteredProducts = state.products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  // Get unique categories
-  const categories = ['all', ...new Set(state.products.map(p => p.category))];
+  const categories = ['all', ...Array.from(new Set(state.products.map(p => p.category)))];
 
   const resetForm = () => {
     setFormData({
       name: '',
-      price: '',
-      stock: '',
-      category: '',
       sku: '',
+      price: 0,
+      stock: 0,
+      category: '',
       description: ''
     });
     setEditingProduct(null);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-      const validationErrors = [];
-      if (!formData.name) validationErrors.push('Nama Produk');
-      if (!formData.price) validationErrors.push('Harga');
-      if (!formData.stock) validationErrors.push('Stok');
-      if (!formData.category) validationErrors.push('Kategori');
-      if (!formData.sku) validationErrors.push('SKU');
-
-      if (validationErrors.length > 0) {
-        toast({
-          title: "Data Tidak Lengkap",
-          description: `Mohon lengkapi field berikut: ${validationErrors.join(', ')}`,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (parseFloat(formData.price) <= 0) {
-        toast({
-          title: "Harga Tidak Valid",
-          description: "Harga produk harus lebih besar dari 0",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (parseInt(formData.stock) < 0) {
-        toast({
-          title: "Stok Tidak Valid",
-          description: "Stok tidak boleh bernilai negatif",
-          variant: "destructive"
-        });
-        return;
-      }    const productData = {
-      name: formData.name,
-      price: parseFloat(formData.price),
-      stock: parseInt(formData.stock),
-      category: formData.category,
-      sku: formData.sku,
-      description: formData.description
-    };
-
-    if (editingProduct) {
-      updateProduct(editingProduct.id, productData);
-      toast({
-        title: "Product Updated",
-        description: `${formData.name} has been updated successfully`,
-      });
-    } else {
-      addProduct(productData);
-      toast({
-        title: "Product Added",
-        description: `${formData.name} has been added to inventory`,
-      });
-    }
-
-    resetForm();
-    setIsAddDialogOpen(false);
   };
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
     setFormData({
       name: product.name,
-      price: product.price.toString(),
-      stock: product.stock.toString(),
-      category: product.category,
       sku: product.sku,
+      price: product.price,
+      stock: product.stock,
+      category: product.category,
       description: product.description || ''
     });
     setIsAddDialogOpen(true);
@@ -150,25 +106,25 @@ const Products = () => {
     try {
       await deleteProduct(product.id);
       toast({
-        title: "Produk Dihapus",
-        description: `${product.name} telah dihapus dari inventaris`,
+        title: "Produk dihapus",
+        description: `${product.name} telah dihapus dari katalog.`,
       });
     } catch (error) {
-      if (error.code === '23503') { // Foreign key violation
-        toast({
-          title: "Produk Tidak Dapat Dihapus",
-          description: `Produk '${product.name}' tidak dapat dihapus karena masih memiliki riwayat transaksi penjualan. Pertimbangkan untuk mengarsipkan produk ini sebagai gantinya.`,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Terjadi kesalahan saat menghapus produk",
-          variant: "destructive"
-        });
-      }
+      console.error('Error deleting product:', error);
+      toast({
+        title: "Gagal menghapus produk",
+        description: "Terjadi kesalahan saat menghapus produk.",
+        variant: "destructive",
+      });
     }
   };
+
+  const filteredProducts = state.products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <div className="space-y-6">
@@ -179,102 +135,119 @@ const Products = () => {
         </div>
         
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-gradient-to-r from-primary to-primary/80">
-              <Plus className="h-4 w-4 mr-2" />
-              Tambah Produk
-            </Button>
-          </DialogTrigger>
+          <ProductPermissions allowEdit={true}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm} className="bg-gradient-to-r from-primary to-primary/80">
+                <Plus className="h-4 w-4 mr-2" />
+                Tambah Produk
+              </Button>
+            </DialogTrigger>
+          </ProductPermissions>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>
-                {editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
-              </DialogTitle>
+              <DialogTitle>{editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Nama Produk *</Label>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                if (editingProduct) {
+                  await updateProduct(editingProduct.id, formData);
+                  toast({
+                    title: "Produk diperbarui",
+                    description: `${formData.name} telah diperbarui.`
+                  });
+                } else {
+                  await addProduct(formData);
+                  toast({
+                    title: "Produk ditambahkan",
+                    description: `${formData.name} telah ditambahkan ke katalog.`
+                  });
+                }
+                setIsAddDialogOpen(false);
+                resetForm();
+              } catch (error) {
+                console.error('Error saving product:', error);
+                toast({
+                  title: "Gagal menyimpan produk",
+                  description: "Terjadi kesalahan saat menyimpan produk.",
+                  variant: "destructive",
+                });
+              }
+            }} className="space-y-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nama Produk</Label>
+                    <Input
+                      id="name"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sku">SKU</Label>
+                    <Input
+                      id="sku"
+                      required
+                      value={formData.sku}
+                      onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Harga (Rp)</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      required
+                      min={0}
+                      value={formData.price}
+                      onChange={(e) => setFormData(prev => ({ ...prev, price: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="stock">Stok</Label>
+                    <Input
+                      id="stock"
+                      type="number"
+                      required
+                      min={0}
+                      value={formData.stock}
+                      onChange={(e) => setFormData(prev => ({ ...prev, stock: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">Kategori</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="Masukkan nama produk"
+                    id="category"
                     required
+                    value={formData.category}
+                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                    placeholder="Contoh: Minuman, Makanan, Snack"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="sku">SKU *</Label>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Deskripsi (Opsional)</Label>
                   <Input
-                    id="sku"
-                    value={formData.sku}
-                    onChange={(e) => setFormData({...formData, sku: e.target.value})}
-                    placeholder="Masukkan SKU"
-                    required
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   />
                 </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="price">Harga *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: e.target.value})}
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="stock">Jumlah Stok *</Label>
-                  <Input
-                    id="stock"
-                    type="number"
-                    min="0"
-                    value={formData.stock}
-                    onChange={(e) => setFormData({...formData, stock: e.target.value})}
-                    placeholder="0"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <Label htmlFor="category">Kategori *</Label>
-                <Input
-                  id="category"
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  placeholder="Masukkan kategori"
-                  required
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="description">Deskripsi</Label>
-                <Input
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  placeholder="Deskripsi produk (opsional)"
-                />
-              </div>
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsAddDialogOpen(false)}
-                >
-                  Batal
-                </Button>
-                <Button type="submit" className="bg-gradient-to-r from-primary to-primary/80">
-                  {editingProduct ? 'Update Produk' : 'Tambah Produk'}
-                </Button>
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => {
+                  setIsAddDialogOpen(false);
+                  resetForm();
+                }}>Batal</Button>
+                <Button type="submit">{editingProduct ? 'Simpan Perubahan' : 'Tambah Produk'}</Button>
               </div>
             </form>
           </DialogContent>
@@ -318,79 +291,82 @@ const Products = () => {
                   <p className="text-sm text-muted-foreground">{product.sku}</p>
                 </div>
                 <div className="flex space-x-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEdit(product)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Konfirmasi Penghapusan Produk</AlertDialogTitle>
-                        <AlertDialogDescription className="space-y-2">
-                          <p>Anda akan menghapus produk berikut:</p>
-                          <div className="font-medium">
-                            <p>Nama: {product.name}</p>
-                            <p>SKU: {product.sku}</p>
-                            <p>Stok: {product.stock} unit</p>
-                          </div>
-                          <p className="text-red-500">
-                            PERHATIAN: Produk yang memiliki riwayat transaksi penjualan tidak dapat dihapus 
-                            untuk menjaga integritas data laporan penjualan.
-                          </p>
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Batal</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(product)}>Hapus</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <ProductPermissions allowEdit={true}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEdit(product)}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  </ProductPermissions>
+
+                  <ProductPermissions allowEdit={true}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setAdjustingProduct(product);
+                        setIsStockAdjustmentOpen(true);
+                      }}
+                    >
+                      <History className="h-4 w-4" />
+                    </Button>
+                  </ProductPermissions>
+
+                  <ProductPermissions allowEdit={false}>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Konfirmasi Penghapusan Produk</AlertDialogTitle>
+                          <AlertDialogDescription className="space-y-2">
+                            <p>Anda akan menghapus produk berikut:</p>
+                            <div className="font-medium">
+                              <p>Nama: {product.name}</p>
+                              <p>SKU: {product.sku}</p>
+                              <p>Stok: {product.stock} unit</p>
+                            </div>
+                            <p className="text-red-500">
+                              PERHATIAN: Produk yang memiliki riwayat transaksi penjualan tidak dapat dihapus 
+                              untuk menjaga integritas data laporan penjualan.
+                            </p>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Batal</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(product)}>Hapus</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </ProductPermissions>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-2xl font-bold text-foreground">
-                    Rp{product.price.toLocaleString('id-ID')}
-                  </span>
-                  <Badge variant="secondary">{product.category}</Badge>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-1">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Stok:</span>
+              <div className="space-y-2">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <Label>Kategori</Label>
+                    <Badge variant="secondary">{product.category}</Badge>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {product.stock < 10 && (
-                      <div className="flex items-center gap-1">
-                        <AlertTriangle className="h-4 w-4 text-warning" />
-                        <span className="text-xs text-warning">Stok Menipis</span>
-                      </div>
-                    )}
-                    <Badge 
-                      variant={product.stock < 10 ? "destructive" : "default"}
-                      className={product.stock < 10 ? "bg-warning text-warning-foreground" : ""}
-                    >
-                      {product.stock === 0 ? "Stok Habis" : `${product.stock} unit tersisa`}
-                    </Badge>
+                  <div className="text-right">
+                    <Label>Stok</Label>
+                    <p className={`font-medium ${product.stock <= 10 ? 'text-red-500' : ''}`}>
+                      {product.stock} unit
+                    </p>
                   </div>
                 </div>
-                
-                {product.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {product.description}
+                <div>
+                  <Label>Harga</Label>
+                  <p className="font-medium">
+                    Rp {product.price.toLocaleString('id-ID')}
                   </p>
-                )}
+                </div>
               </div>
             </CardContent>
           </Card>
