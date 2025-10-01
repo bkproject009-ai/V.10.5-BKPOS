@@ -1,15 +1,13 @@
 import { useState, useRef } from 'react';
 import { usePOS } from '@/contexts/POSContext';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Receipt } from '@/components/ui/receipt';
-import { MobileCart } from '@/components/ui/mobile-cart';
-import { DesktopCart } from '@/components/ui/desktop-cart';
+import { Cart } from '@/components/ui/cart';
 import { 
   Dialog,
   DialogContent,
@@ -33,7 +31,6 @@ const POS = () => {
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
 
   // Filter products
   const filteredProducts = state.products.filter(product => {
@@ -165,29 +162,17 @@ const POS = () => {
 
       {/* Cart Section */}
       <div className="lg:col-span-1">
-        {isMobile ? (
-          <MobileCart
-            cart={state.cart}
-            subtotal={subtotal}
-            taxes={taxes}
-            total={total}
-            onQuantityChange={handleQuantityChange}
-            onRemoveItem={removeFromCart}
-            onClear={clearCart}
-            onCheckout={() => setIsCheckoutOpen(true)}
-          />
-        ) : (
-          <DesktopCart
-            cart={state.cart}
-            subtotal={subtotal}
-            taxes={taxes}
-            total={total}
-            onQuantityChange={handleQuantityChange}
-            onRemoveItem={removeFromCart}
-            onClear={clearCart}
-            onCheckout={() => setIsCheckoutOpen(true)}
-          />
-        )}
+        <Cart
+          cart={state.cart}
+          subtotal={subtotal}
+          taxes={taxes}
+          total={total}
+          onQuantityChange={handleQuantityChange}
+          onRemoveItem={removeFromCart}
+          onClearCart={clearCart}
+          onCheckout={() => setIsCheckoutOpen(true)}
+          isMobile={isMobile}
+        />
       </div>
 
       {/* Checkout Dialog */}
@@ -245,16 +230,7 @@ const POS = () => {
       </Dialog>
 
       {/* Receipt Dialog */}
-      <Dialog 
-        open={showReceipt} 
-        onOpenChange={(open) => {
-          setShowReceipt(open);
-          if (!open && isMobile) {
-            // Navigate back to POS page when closing receipt on mobile
-            navigate('/pos');
-          }
-        }}
-      >
+      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Struk Pembayaran</DialogTitle>
@@ -270,15 +246,7 @@ const POS = () => {
             />
           </div>
           <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowReceipt(false);
-                if (isMobile) {
-                  navigate('/pos');
-                }
-              }}
-            >
+            <Button variant="outline" onClick={() => setShowReceipt(false)}>
               Tutup
             </Button>
             <Button 

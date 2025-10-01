@@ -8,16 +8,27 @@ import {
   Settings,
   Store,
   LogOut,
-  User
+  User,
+  Menu
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 const Navigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const handleLogout = async () => {
     try {
@@ -68,6 +79,33 @@ const Navigation = () => {
     }
   ];
 
+  const NavigationItems = () => (
+    <>
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Link key={item.path} to={item.path}>
+            <Button
+              variant={location.pathname === item.path ? 'default' : 'ghost'}
+              className="flex items-center space-x-2 w-full justify-start"
+            >
+              <Icon className="h-5 w-5" />
+              <span>{item.label}</span>
+            </Button>
+          </Link>
+        );
+      })}
+      <Button
+        variant="ghost"
+        onClick={handleLogout}
+        className="flex items-center space-x-2 text-red-500 hover:text-red-700 hover:bg-red-100 w-full justify-start"
+      >
+        <LogOut className="h-5 w-5" />
+        <span>Logout</span>
+      </Button>
+    </>
+  );
+
   return (
     <nav className="bg-card border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -81,33 +119,30 @@ const Navigation = () => {
             </Link>
           </div>
 
-          <div className="flex items-center space-x-4">
-            {/* Navigation Items */}
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link key={item.path} to={item.path}>
-                  <Button
-                    variant={location.pathname === item.path ? 'default' : 'ghost'}
-                    className="flex items-center space-x-2"
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </Button>
-                </Link>
-              );
-            })}
-
-            {/* Logout Button */}
-            <Button
-              variant="ghost"
-              onClick={handleLogout}
-              className="flex items-center space-x-2 text-red-500 hover:text-red-700 hover:bg-red-100"
-            >
-              <LogOut className="h-5 w-5" />
-              <span>Logout</span>
-            </Button>
-          </div>
+          {isMobile ? (
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="lg:hidden">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Menu</SheetTitle>
+                  <SheetDescription>
+                    Navigasi BK POS
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-4 space-y-2">
+                  <NavigationItems />
+                </div>
+              </SheetContent>
+            </Sheet>
+          ) : (
+            <div className="hidden lg:flex items-center space-x-4">
+              <NavigationItems />
+            </div>
+          )}
         </div>
       </div>
     </nav>

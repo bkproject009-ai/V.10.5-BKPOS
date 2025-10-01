@@ -74,38 +74,38 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 md:p-8">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Dasbor</h1>
-        <p className="text-muted-foreground">Ringkasan operasional toko Anda</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dasbor</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Ringkasan operasional toko Anda</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title} className="bg-gradient-to-br from-card to-muted/20">
-              <CardContent className="p-6">
+              <CardContent className="p-4 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <div className="space-y-1">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">{stat.title}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-foreground truncate">{stat.value}</p>
                   </div>
-                  <div className="bg-primary/10 p-3 rounded-full">
-                    <Icon className="h-6 w-6 text-primary" />
+                  <div className="bg-primary/10 p-2 sm:p-3 rounded-full shrink-0">
+                    <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                   </div>
                 </div>
-                <div className="mt-4 flex items-center">
+                <div className="mt-3 md:mt-4 flex items-center text-xs sm:text-sm">
                   {stat.trendUp ? (
-                    <TrendingUp className="h-4 w-4 text-success mr-1" />
+                    <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-success mr-1" />
                   ) : (
-                    <TrendingDown className="h-4 w-4 text-destructive mr-1" />
+                    <TrendingDown className="h-3 w-3 sm:h-4 sm:w-4 text-destructive mr-1" />
                   )}
-                  <span className={`text-sm ${stat.trendUp ? 'text-success' : 'text-destructive'}`}>
+                  <span className={`${stat.trendUp ? 'text-success' : 'text-destructive'}`}>
                     {stat.trend}
                   </span>
-                  <span className="text-sm text-muted-foreground ml-1">vs last month</span>
+                  <span className="text-muted-foreground ml-1">vs last month</span>
                 </div>
               </CardContent>
             </Card>
@@ -113,42 +113,42 @@ const Dashboard = () => {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Best/Worst Selling Products */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <TrendingUp className="h-5 w-5 text-success" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-success" />
               <span>Kinerja Produk</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-success/10 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Terlaris</p>
-                  <p className="font-semibold text-foreground">{bestSellingProduct?.name}</p>
-                  <p className="text-sm text-success">
+          <CardContent className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="p-3 sm:p-4 bg-success/10 rounded-lg">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Terlaris</p>
+                  <p className="font-semibold text-foreground truncate">{bestSellingProduct?.name}</p>
+                  <p className="text-xs sm:text-sm text-success">
                     {productSales.get(bestSellingProduct?.id) || 0} unit terjual
                   </p>
                 </div>
-                <Badge variant="secondary" className="bg-success text-success-foreground">
+                <Badge variant="secondary" className="bg-success text-success-foreground whitespace-nowrap">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   Teratas
                 </Badge>
               </div>
             </div>
             
-            <div className="p-4 bg-warning/10 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Perlu Perhatian</p>
-                  <p className="font-semibold text-foreground">{worstSellingProduct?.name}</p>
-                  <p className="text-sm text-warning">
+            <div className="p-3 sm:p-4 bg-warning/10 rounded-lg">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Perlu Perhatian</p>
+                  <p className="font-semibold text-foreground truncate">{worstSellingProduct?.name}</p>
+                  <p className="text-xs sm:text-sm text-warning">
                     {productSales.get(worstSellingProduct?.id) || 0} unit terjual
                   </p>
                 </div>
-                <Badge variant="secondary" className="bg-warning text-warning-foreground">
+                <Badge variant="secondary" className="bg-warning text-warning-foreground whitespace-nowrap">
                   <TrendingDown className="h-3 w-3 mr-1" />
                   Rendah
                 </Badge>
@@ -159,9 +159,9 @@ const Dashboard = () => {
 
         {/* Low Stock Alerts */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-warning" />
               <span>Stok Rendah</span>
               {lowStockProducts.length > 0 && (
                 <Badge variant="secondary" className="bg-warning text-warning-foreground">
@@ -170,26 +170,26 @@ const Dashboard = () => {
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             {lowStockProducts.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
+              <p className="text-sm text-muted-foreground text-center py-6 sm:py-8">
                 Semua produk tersedia dengan baik! 🎉
               </p>
             ) : (
               <div className="space-y-3">
                 {lowStockProducts.slice(0, 5).map(product => (
-                  <div key={product.id} className="flex items-center justify-between p-3 bg-warning/10 rounded-lg">
-                    <div>
-                      <p className="font-medium text-foreground">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">{product.sku}</p>
+                  <div key={product.id} className="flex items-center justify-between gap-4 p-3 bg-warning/10 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground text-sm truncate">{product.name}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{product.sku}</p>
                     </div>
-                    <Badge variant="outline" className="border-warning text-warning">
+                    <Badge variant="outline" className="border-warning text-warning whitespace-nowrap shrink-0">
                       {product.stock} sisa
                     </Badge>
                   </div>
                 ))}
                 {lowStockProducts.length > 5 && (
-                  <p className="text-sm text-muted-foreground text-center">
+                  <p className="text-xs sm:text-sm text-muted-foreground text-center">
                     +{lowStockProducts.length - 5} produk lagi perlu restock
                   </p>
                 )}
@@ -201,29 +201,36 @@ const Dashboard = () => {
 
       {/* Recent Sales */}
       <Card>
-        <CardHeader>
-          <CardTitle>Transaksi Terbaru</CardTitle>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Transaksi Terbaru</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           {state.sales.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">
+            <p className="text-sm text-muted-foreground text-center py-6 sm:py-8">
               Belum ada transaksi. Mulai penjualan untuk melihat aktivitas terbaru!
             </p>
           ) : (
             <div className="space-y-3">
               {state.sales.slice(-5).reverse().map(sale => (
-                <div key={sale.id} className="flex items-center justify-between p-3 border border-border rounded-lg">
-                  <div>
-                    <p className="font-medium text-foreground">
-                      Transaksi #{sale.id.slice(-6)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
+                <div key={sale.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 p-3 border border-border rounded-lg">
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between sm:justify-start gap-2">
+                      <p className="font-medium text-sm sm:text-base text-foreground truncate">
+                        Transaksi #{sale.id.slice(-6)}
+                      </p>
+                      <Badge variant="outline" className="capitalize text-xs shrink-0 sm:hidden">
+                        {sale.paymentMethod}
+                      </Badge>
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       {sale.date.toLocaleDateString('id-ID')} • {sale.items.length} produk
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-foreground">Rp{sale.total.toLocaleString('id-ID')}</p>
-                    <Badge variant="outline" className="capitalize">
+                  <div className="flex items-center justify-between sm:text-right gap-2">
+                    <p className="font-semibold text-foreground text-sm sm:text-base sm:order-2">
+                      Rp{sale.total.toLocaleString('id-ID')}
+                    </p>
+                    <Badge variant="outline" className="capitalize text-xs shrink-0 hidden sm:inline-flex sm:order-1">
                       {sale.paymentMethod}
                     </Badge>
                   </div>
