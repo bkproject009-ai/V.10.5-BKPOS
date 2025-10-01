@@ -14,33 +14,45 @@ const Dashboard = () => {
   const { state } = usePOS();
 
   // Calculate analytics
-  const totalRevenue = state.sales.reduce((sum, sale) => sum + sale.total, 0);
-  const totalTransactions = state.sales.length;
+  const totalRevenue = Array.isArray(state.sales) ? state.sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0) : 0;
+  const totalTransactions = Array.isArray(state.sales) ? state.sales.length : 0;
   const averageOrderValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
   
   // Low stock products (stock < 10)
-  const lowStockProducts = state.products.filter(product => product.stock < 10);
+  const lowStockProducts = Array.isArray(state.products) ? state.products.filter(product => (Number(product.stock) || 0) < 10) : [];
   
   // Best selling products
   const productSales = new Map();
-  state.sales.forEach(sale => {
-    sale.items.forEach(item => {
-      const current = productSales.get(item.product.id) || 0;
-      productSales.set(item.product.id, current + item.quantity);
+  if (Array.isArray(state.sales)) {
+    state.sales.forEach(sale => {
+      if (Array.isArray(sale.items)) {
+        sale.items.forEach(item => {
+          if (item?.product_id) {
+            const current = productSales.get(item.product_id) || 0;
+            const quantity = Number(item.quantity) || 0;
+            productSales.set(item.product_id, current + quantity);
+          }
+        });
+      }
     });
-  });
+  }
   
-  const bestSellingProduct = state.products.reduce((best, product) => {
-    const sales = productSales.get(product.id) || 0;
-    const bestSales = productSales.get(best.id) || 0;
-    return sales > bestSales ? product : best;
-  }, state.products[0]);
+  let bestSellingProduct = null;
+  let worstSellingProduct = null;
 
-  const worstSellingProduct = state.products.reduce((worst, product) => {
-    const sales = productSales.get(product.id) || 0;
-    const worstSales = productSales.get(worst.id) || Infinity;
-    return sales < worstSales ? product : worst;
-  }, state.products[0]);
+  if (state.products.length > 0) {
+    bestSellingProduct = state.products.reduce((best, product) => {
+      const sales = productSales.get(product.id) || 0;
+      const bestSales = productSales.get(best.id) || 0;
+      return sales > bestSales ? product : best;
+    }, state.products[0]);
+
+    worstSellingProduct = state.products.reduce((worst, product) => {
+      const sales = productSales.get(product.id) || 0;
+      const worstSales = productSales.get(worst.id) || Infinity;
+      return sales < worstSales ? product : worst;
+    }, state.products[0]);
+  }
 
   const stats = [
     {
@@ -219,11 +231,11 @@ const Dashboard = () => {
                         Transaksi #{sale.id.slice(-6)}
                       </p>
                       <Badge variant="outline" className="capitalize text-xs shrink-0 sm:hidden">
-                        {sale.paymentMethod}
+                        {sale.payment_method}
                       </Badge>
                     </div>
                     <p className="text-xs sm:text-sm text-muted-foreground">
-                      {sale.date.toLocaleDateString('id-ID')} • {sale.items.length} produk
+                      {new Date(sale.created_at).toLocaleDateString('id-ID')} • {sale.items.length} produk
                     </p>
                   </div>
                   <div className="flex items-center justify-between sm:text-right gap-2">
@@ -231,7 +243,7 @@ const Dashboard = () => {
                       Rp{sale.total.toLocaleString('id-ID')}
                     </p>
                     <Badge variant="outline" className="capitalize text-xs shrink-0 hidden sm:inline-flex sm:order-1">
-                      {sale.paymentMethod}
+                      {sale.payment_method}
                     </Badge>
                   </div>
                 </div>

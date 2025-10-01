@@ -1,0 +1,319 @@
+const Reports = () => {
+  const navigate = useNavigate();
+  const { session, user } = useAuth();
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvContent, setCsvContent] = useState('');
+
+  const { state } = usePOS();
+
+  // Use React Query for data fetching
+  const { 
+    data: sales,
+    isLoading,
+    error
+  } = useQuery({
+    queryKey: ['sales'],
+    queryFn: async () => {
+      try {
+        const result = await fetchSales();
+        console.log('Sales data fetched:', result);
+        return result;
+      } catch (err) {
+        console.error('Error fetching sales:', err);
+        throw err;
+      }
+    },
+    enabled: !!session?.access_token,
+    retry: 1,
+    refetchOnWindowFocus: false
+  });
+  
+  useEffect(() => {
+    if (!session || !user) {
+      toast({
+        title: "Unauthorized",
+        description: "Please login to access this page",
+        variant: "destructive"
+      });
+      navigate("/login");
+    }
+  }, [session, user, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <p className="text-sm text-gray-600">Loading sales data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <div className="text-red-500 text-xl">⚠️</div>
+          <p className="text-sm text-gray-600">Error loading sales data. Please try again.</p>
+          <Button 
+            variant="outline"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate analytics from fetched sales
+  const totalRevenue = (sales || []).reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+  const totalTransactions = (sales || []).length;
+  const totalItemsSold = (sales || []).reduce((sum, sale) => 
+    sum + (Array.isArray(sale.items) ? sale.items.reduce((itemSum, item) => 
+      itemSum + (Number(item.quantity) || 0), 0) : 0), 0);
+
+  // Product sales analytics with safe checks
+  const productSales = new Map();
+  
+  // Safely process sales data
+  const salesData = sales || [];
+  
+  salesData.forEach(sale => {
+    if (Array.isArray(sale?.items)) {
+      sale.items.forEach(item => {
+        if (item?.product_id) {
+          const current = productSales.get(item.product_id) || 0;
+          const quantity = Number(item.quantity) || 0;
+          productSales.set(item.product_id, current + quantity);
+        }
+      });
+    }
+  });
+
+  // Sort products by sales with safe data handling
+  const productSalesArray = salesData
+    .flatMap(sale => {
+      if (!Array.isArray(sale?.items)) return [];
+      
+      return sale.items
+        .filter(item => item && item.product_id)
+        .map(item => ({
+          id: item.product_id,
+          name: item.product?.name || 'Unknown Product',
+          price: Number(item.price_at_time) || 0,
+          quantitySold: Number(item.quantity) || 0,
+          revenue: (Number(item.quantity) || 0) * (Number(item.price_at_time) || 0)
+        }));
+    })
+    .reduce((acc, curr) => {
+      const existing = acc.find(p => p.id === curr.id);
+      if (existing) {
+        existing.quantitySold += curr.quantitySold;
+        existing.revenue += curr.revenue;
+        return acc;
+      }
+      return [...acc, curr];
+    }, [])
+    .sort((a, b) => b.quantitySold - a.quantitySold);
+
+  return (
+    <div className="space-y-4 p-4">
+      {/* Summary Cards */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Pendapatan</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Rp{totalRevenue.toLocaleString('id-ID')}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Transaksi</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalTransactions}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Item Terjual</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalItemsSold}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Product Performance */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Performa Produk</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {productSalesArray.length === 0 ? (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Tidak ada data penjualan produk</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {productSalesArray.map(product => (
+                <div key={product.id} className="flex items-center justify-between p-4 border rounded">
+                  <div>
+                    <p className="font-medium">{product.name}</p>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      Rp{product.price.toLocaleString('id-ID')}
+                      {product.quantitySold === 0 && (
+                        <Badge variant="outline" className="ml-2">Belum terjual</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{product.quantitySold}</p>
+                    <p className="text-sm text-muted-foreground">terjual</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">Rp{product.revenue.toLocaleString('id-ID')}</p>
+                    <p className="text-sm text-muted-foreground">pendapatan</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sales Management Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Manajemen Penjualan</span>
+            <Badge variant="secondary">{(sales || []).length} Total Transaksi</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!sales || sales.length === 0 ? (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Tidak ada data penjualan ditemukan</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID Transaksi</TableHead>
+                    <TableHead>Tanggal & Waktu</TableHead>
+                    <TableHead>Produk</TableHead>
+                    <TableHead>Subtotal</TableHead>
+                    <TableHead>Pajak</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Pembayaran</TableHead>
+                    <TableHead>Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(sales || []).map((sale: Sale) => {
+                    const saleDate = new Date(sale.created_at);
+                    const taxAmount = Array.isArray(sale.sales_taxes) 
+                      ? sale.sales_taxes.reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0)
+                      : 0;
+                    
+                    return (
+                      <TableRow key={sale.id}>
+                        <TableCell className="font-mono text-sm">#{sale.id.slice(0, 8)}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm font-medium">{saleDate.toLocaleDateString('id-ID')}</p>
+                            <p className="text-xs text-muted-foreground">{saleDate.toLocaleTimeString('id-ID')}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{Array.isArray(sale.items) ? sale.items.length : 0} produk</Badge>
+                        </TableCell>
+                        <TableCell>Rp{Number(sale.subtotal || 0).toLocaleString('id-ID')}</TableCell>
+                        <TableCell>Rp{taxAmount.toLocaleString('id-ID')}</TableCell>
+                        <TableCell className="font-semibold">Rp{Number(sale.total || 0).toLocaleString('id-ID')}</TableCell>
+                        <TableCell>
+                          <Badge variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}>
+                            {sale.payment_method === 'cash' ? 'Tunai' : 'Kartu'}
+                          </Badge>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="ml-2">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Detail Transaksi #{sale.id.slice(0, 8)}</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <p className="font-medium">Tanggal:</p>
+                                    <p>{saleDate.toLocaleString('id-ID')}</p>
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">Pembayaran:</p>
+                                    <p className="capitalize">{sale.payment_method === 'cash' ? 'Tunai' : 'Kartu'}</p>
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="font-medium mb-2">Detail Transaksi:</p>
+                                  <div className="space-y-2">
+                                    {(sale.items || []).map((item, index) => (
+                                      <div key={index} className="flex justify-between text-sm bg-muted/50 p-2 rounded">
+                                        <span>{item.product?.name || `Produk #${item.product_id}`} × {Number(item.quantity || 0)}</span>
+                                        <span>Rp{(Number(item.price_at_time || 0) * Number(item.quantity || 0)).toLocaleString('id-ID')}</span>
+                                      </div>
+                                    ))}
+                                    {Array.isArray(sale.sales_taxes) && sale.sales_taxes.map((tax, index) => (
+                                      <div key={`tax-${index}`} className="flex justify-between text-sm p-2">
+                                        <span>{tax.tax_types?.name || 'Pajak'} ({(tax.tax_types?.rate || 0)}%)</span>
+                                        <span>Rp{Number(tax.tax_amount || 0).toLocaleString('id-ID')}</span>
+                                      </div>
+                                    ))}
+                                    <div className="border-t mt-4 pt-4 flex justify-between font-semibold">
+                                      <span>Total</span>
+                                      <span>Rp{Number(sale.total || 0).toLocaleString('id-ID')}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default Reports;

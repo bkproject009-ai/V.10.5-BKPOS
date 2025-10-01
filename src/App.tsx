@@ -3,7 +3,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { 
+  createBrowserRouter, 
+  RouterProvider, 
+  Route, 
+  createRoutesFromElements,
+  Outlet
+} from "react-router-dom";
 import "@/styles/receipt.css";
 import { POSProvider } from "@/contexts/POSContext";
 import Navigation from "@/components/layout/Navigation";
@@ -18,6 +24,7 @@ import KasirFront from "@/pages/KasirFront";
 import Login from "@/pages/Login";
 import EmailConfirmation from "@/pages/EmailConfirmation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 const queryClient = new QueryClient();
 
@@ -28,36 +35,49 @@ const App = () => (
         <POSProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/email-confirmation" element={<EmailConfirmation />} />
-            {/* Cashier-only POS front page, no navigation */}
-            <Route path="/kasir" element={<ProtectedRoute><KasirFront /></ProtectedRoute>} />
-            {/* Main app with navigation */}
-            <Route
-              path="*"
-              element={
-                <ProtectedRoute>
-                  <div className="min-h-screen bg-background">
-                    <Navigation />
-                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                      <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/products" element={<Products />} />
-                        <Route path="/pos" element={<POS />} />
-                        <Route path="/reports" element={<Reports />} />
-                        <Route path="/settings" element={<Settings />} />
-                        <Route path="/profile" element={<Profile />} />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </main>
-                  </div>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </BrowserRouter>
+          <RouterProvider 
+            router={createBrowserRouter(
+              createRoutesFromElements(
+                <Route errorElement={<ErrorBoundary />}>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/email-confirmation" element={<EmailConfirmation />} />
+                  
+                  {/* Cashier-only POS front page, no navigation */}
+                  <Route 
+                    path="/kasir" 
+                    element={
+                      <ProtectedRoute>
+                        <KasirFront />
+                      </ProtectedRoute>
+                    } 
+                  />
+
+                  {/* Main app with navigation */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <div className="min-h-screen bg-background">
+                          <Navigation />
+                          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                            <Outlet />
+                          </main>
+                        </div>
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Dashboard />} />
+                    <Route path="products" element={<Products />} />
+                    <Route path="pos" element={<POS />} />
+                    <Route path="reports" element={<Reports />} />
+                    <Route path="settings" element={<Settings />} />
+                    <Route path="profile" element={<Profile />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Route>
+              )
+            )} 
+          />
       </POSProvider>
       </AuthProvider>
     </TooltipProvider>

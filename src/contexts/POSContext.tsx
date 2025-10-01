@@ -18,14 +18,56 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface TaxType {
+  id: string;
+  name: string;
+  rate: number;
+}
+
+export interface SaleTax {
+  id: string;
+  sale_id: string;
+  tax_type_id: string;
+  tax_amount: number;
+  tax_types?: TaxType;
+}
+
+export interface SaleItem {
+  id: string;
+  sale_id: string;
+  product_id: string;
+  quantity: number;
+  price_at_time: number;
+  product?: Product;
+}
+
 export interface Sale {
   id: string;
-  items: CartItem[];
-  subtotal: number;
-  taxAmount: number;
+  created_at: string;
   total: number;
-  date: Date;
-  paymentMethod: 'cash' | 'card' | 'qris';
+  subtotal: number;
+  tax_amount: number;
+  payment_method: 'cash' | 'card' | 'qris';
+  sale_items: SaleItem[];
+  sales_taxes: SaleTax[];
+}
+
+export interface Sale {
+  id: string;
+  created_at: string;
+  subtotal: number;
+  total: number;
+  payment_method: 'cash' | 'card' | 'qris';
+  cashier_id: string;
+  items: SaleItem[];
+  sales_taxes: Array<{
+    tax_type_id: string;
+    tax_amount: number;
+    tax_types?: {
+      name: string;
+      rate: number;
+    };
+  }>;
 }
 
 import { TaxType } from '@/lib/tax';

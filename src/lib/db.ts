@@ -117,20 +117,50 @@ export async function createSale(
 export async function fetchSales(): Promise<Sale[]> {
   const { data, error } = await supabase
     .from('sales')
-    .select('*, sales_taxes(tax_type_id, tax_amount)')
-    .order('date', { ascending: false });
+    .select(`
+      id,
+      created_at,
+      subtotal,
+      total,
+      payment_method,
+      cashier_id,
+      sale_items (
+        quantity,
+        price_at_time,
+        product_id
+      ),
+      sales_taxes (
+        tax_type_id,
+        tax_amount
+      )
+    `)
+    .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error fetching sales:', error);
+    throw error;
+  }
   
   // Transform the data to match the Sale type
-  const transformedData = data?.map(sale => ({
-    ...sale,
-    taxes: sale.sales_taxes || [],
-    items: sale.items || [],
-    date: new Date(sale.date)
+  const transformedData = (data || []).map(sale => ({
+    id: sale.id,
+    created_at: sale.created_at,
+    subtotal: Number(sale.subtotal || 0),
+    total: Number(sale.total || 0),
+    payment_method: sale.payment_method,
+    cashier_id: sale.cashier_id,
+    items: Array.isArray(sale.sale_items) ? sale.sale_items.map(item => ({
+      quantity: Number(item.quantity),
+      price_at_time: Number(item.price_at_time),
+      product_id: item.product_id
+    })) : [],
+    sales_taxes: Array.isArray(sale.sales_taxes) ? sale.sales_taxes.map(tax => ({
+      tax_type_id: tax.tax_type_id,
+      tax_amount: Number(tax.tax_amount)
+    })) : []
   }));
 
-  return transformedData || [];
+  return transformedData;
 }
 
 export async function updateSale(id: string, sale: Partial<Sale>): Promise<Sale> {
