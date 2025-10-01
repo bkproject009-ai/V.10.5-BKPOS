@@ -1,0 +1,271 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import ReCAPTCHA from 'react-google-recaptcha';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Checkbox } from '../components/ui/checkbox';
+import { Progress } from '../components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
+import { InfoCircledIcon } from '@radix-ui/react-icons';
+
+const ROLES = [
+  { value: 'cashier', label: 'Kasir' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'admin', label: 'Admin' },
+];
+
+export default function SignUp() {
+  const navigate = useNavigate();
+  const { signUp, validatePassword } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    fullName: '',
+    role: 'cashier',
+    acceptTerms: false,
+    captchaToken: '',
+  });
+  const [passwordScore, setPasswordScore] = useState(0);
+  const [passwordFeedback, setPasswordFeedback] = useState<string[]>([]);
+
+  // Password strength indicator color
+  const getStrengthColor = (score: number) => {
+    if (score <= 1) return 'bg-red-500';
+    if (score <= 2) return 'bg-orange-500';
+    if (score <= 3) return 'bg-yellow-500';
+    if (score <= 4) return 'bg-green-500';
+    return 'bg-green-600';
+  };
+
+  // Update password validation on password change
+  useEffect(() => {
+    if (formData.password) {
+      const validation = validatePassword(formData.password);
+      setPasswordScore(validation.score);
+      setPasswordFeedback(validation.feedback);
+    } else {
+      setPasswordScore(0);
+      setPasswordFeedback([]);
+    }
+  }, [formData.password, validatePassword]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      await signUp(formData);
+      navigate('/login', { 
+        state: { 
+          message: 'Pendaftaran berhasil! Silakan cek email Anda untuk verifikasi.'
+        }
+      });
+    } catch (error) {
+      setLoading(false);
+    }
+  };
+
+  const handleCaptchaChange = (token: string | null) => {
+    setFormData(prev => ({
+      ...prev,
+      captchaToken: token || ''
+    }));
+  };
+
+  return (
+    <div className="container flex items-center justify-center min-h-screen py-8">
+      <Card className="w-full max-w-lg">
+        <CardHeader>
+          <CardTitle>Daftar Akun Baru</CardTitle>
+          <CardDescription>
+            Lengkapi data berikut untuk membuat akun di BK-POS
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            {/* Nama Lengkap */}
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Nama Lengkap</Label>
+              <Input
+                id="fullName"
+                placeholder="Masukkan nama lengkap"
+                value={formData.fullName}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  fullName: e.target.value
+                }))}
+                required
+              />
+            </div>
+
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="nama@perusahaan.com"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  email: e.target.value
+                }))}
+                required
+              />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  password: e.target.value
+                }))}
+                required
+              />
+              {/* Password strength indicator */}
+              <Progress
+                value={passwordScore * 20}
+                className={getStrengthColor(passwordScore)}
+              />
+              {passwordFeedback.length > 0 && (
+                <Alert>
+                  <InfoCircledIcon className="h-4 w-4" />
+                  <AlertTitle>Persyaratan Password</AlertTitle>
+                  <AlertDescription>
+                    <ul className="list-disc pl-4 text-sm">
+                      {passwordFeedback.map((feedback, index) => (
+                        <li key={index}>{feedback}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            {/* Konfirmasi Password */}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Konfirmasi Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  confirmPassword: e.target.value
+                }))}
+                required
+              />
+              {formData.password && formData.confirmPassword && 
+               formData.password !== formData.confirmPassword && (
+                <p className="text-sm text-red-500">
+                  Password tidak sama
+                </p>
+              )}
+            </div>
+
+            {/* Role Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="role">Peran</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value) => setFormData(prev => ({
+                  ...prev,
+                  role: value
+                }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih peran" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Terms & Conditions */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="terms"
+                checked={formData.acceptTerms}
+                onCheckedChange={(checked) => setFormData(prev => ({
+                  ...prev,
+                  acceptTerms: checked as boolean
+                }))}
+                required
+              />
+              <label
+                htmlFor="terms"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Saya menyetujui syarat dan ketentuan yang berlaku
+              </label>
+            </div>
+
+            {/* Captcha */}
+            <div className="flex justify-center py-2">
+              <ReCAPTCHA
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || 'YOUR_SITE_KEY'}
+                onChange={handleCaptchaChange}
+              />
+            </div>
+          </CardContent>
+
+          <CardFooter className="flex flex-col space-y-4">
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || 
+                !formData.email ||
+                !formData.password ||
+                !formData.confirmPassword ||
+                !formData.fullName ||
+                !formData.acceptTerms ||
+                !formData.captchaToken ||
+                formData.password !== formData.confirmPassword ||
+                passwordScore < 4}
+            >
+              {loading ? 'Mendaftarkan...' : 'Daftar'}
+            </Button>
+            <p className="text-sm text-center">
+              Sudah punya akun?{' '}
+              <Button
+                variant="link"
+                className="p-0"
+                onClick={() => navigate('/login')}
+              >
+                Login di sini
+              </Button>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
+  );
+}

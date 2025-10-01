@@ -1,0 +1,233 @@
+import { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { Session, User } from '@supabase/supabase-js';
+import { initializeDatabase } from '../lib/initDatabase';
+import { toast } from '../hooks/use-toast';
+
+interface SignUpData {
+  email: string;
+  username: string;
+  password: string;
+  confirmPassword: string;
+  fullName: string;
+  phoneNumber: string;
+  address: string;
+  role?: string;
+  acceptTerms: boolean;
+}
+
+interface AuthContextType {
+  session: Session | null;
+  user: User | null;
+  signIn: (identifier: string, password: string) => Promise<void>;
+  signUp: (data: SignUpData) => Promise<{ user: User | null; session: Session | null }>;
+  signOut: () => Promise<void>;
+  loading: boolean;
+  validatePassword: (password: string) => {
+    isValid: boolean;
+    score: number;
+    feedback: string[];
+  };
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const validatePassword = (password: string) => {
+    const feedback: string[] = [];
+    let score = 0;
+
+    // Minimal 8 karakter
+    if (password.length >= 8) score += 1;
+    else feedback.push('Password harus minimal 8 karakter');
+
+    // Harus ada angka
+    if (/[0-9]/.test(password)) score += 1;
+    else feedback.push('Password harus mengandung angka');
+
+    return {
+      isValid: score >= 2,
+      score,
+      feedback
+    };
+  };
+
+  const signIn = async (identifier: string, password: string): Promise<void> => {
+    try {
+      // Check if identifier is email or username
+      const isEmail = identifier.includes('@');
+      let loginEmail = identifier;
+
+      if (!isEmail) {
+        // If using username, get email from database
+        const { data, error } = await supabase
+          .from('users')
+          .select('email')
+          .eq('username', identifier)
+          .single();
+
+        if (error || !data) {
+          throw new Error('Invalid login credentials');
+        }
+        loginEmail = data.email;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ 
+        email: loginEmail, 
+        password 
+      });
+      
+      if (error) throw error;
+      
+      // Initialize database with default values if needed
+      await initializeDatabase();
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const signUp = async (data: SignUpData) => {
+    try {
+      // Validasi input
+      if (!data.email || !data.password || !data.fullName || !data.username) {
+        toast({
+          title: 'Input Error',
+          description: 'Semua field harus diisi',
+          variant: 'destructive',
+        });
+        throw new Error('Semua field harus diisi');
+      }
+
+      // Validasi Terms & Conditions
+      if (!data.acceptTerms) {
+        toast({
+          title: 'Terms & Conditions',
+          description: 'Anda harus menyetujui syarat dan ketentuan',
+          variant: 'destructive',
+        });
+        throw new Error('Anda harus menyetujui syarat dan ketentuan');
+      }
+
+      // Validasi konfirmasi password
+      if (data.password !== data.confirmPassword) {
+        toast({
+          title: 'Password Error',
+          description: 'Password dan konfirmasi password tidak sama',
+          variant: 'destructive',
+        });
+        throw new Error('Password dan konfirmasi password tidak sama');
+      }
+
+      // Validasi kekuatan password
+      const passwordValidation = validatePassword(data.password);
+      if (!passwordValidation.isValid) {
+        toast({
+          title: 'Password Lemah',
+          description: passwordValidation.feedback.join('\n'),
+          variant: 'destructive',
+        });
+        throw new Error('Password tidak memenuhi kriteria keamanan');
+      }
+
+      // Show loading toast
+      toast({
+        title: 'Mendaftarkan akun...',
+        description: 'Mohon tunggu sebentar.',
+      });
+
+      // Sign up with Supabase
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (signUpError) throw signUpError;
+
+      const { user, session } = authData;
+      if (!user) throw new Error('Signup failed');
+
+      // Create user profile in database
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert([
+          {
+            id: user.id,
+            email: data.email,
+            username: data.username,
+            full_name: data.fullName,
+            phone_number: data.phoneNumber,
+            address: data.address,
+            role: data.role || 'cashier',
+          },
+        ]);
+
+      if (profileError) {
+        // Rollback signup if profile creation fails
+        await supabase.auth.admin.deleteUser(user.id);
+        throw profileError;
+      }
+
+      toast({
+        title: 'Pendaftaran Berhasil',
+        description: 'Silakan cek email Anda untuk verifikasi.',
+      });
+
+      return { user, session };
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Terjadi kesalahan saat mendaftar.',
+      });
+      throw error;
+    }
+  };
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  const value = {
+    session,
+    user,
+    signIn,
+    signUp,
+    signOut,
+    loading,
+    validatePassword,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

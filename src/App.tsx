@@ -22,6 +22,7 @@ import Profile from "@/pages/Profile";
 import NotFound from "./pages/NotFound";
 import KasirFront from "@/pages/KasirFront";
 import Login from "@/pages/Login";
+import SignUp from "@/pages/SignUp";
 import EmailConfirmation from "@/pages/EmailConfirmation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -40,6 +41,7 @@ const App = () => (
               createRoutesFromElements(
                 <Route errorElement={<ErrorBoundary />}>
                   <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<SignUp />} />
                   <Route path="/email-confirmation" element={<EmailConfirmation />} />
                   
                   {/* Cashier-only POS front page, no navigation */}
