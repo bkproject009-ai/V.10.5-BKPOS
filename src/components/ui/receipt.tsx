@@ -55,7 +55,7 @@ export function Receipt({
           <div className="text-center space-y-1">
             <h2 className="font-bold text-xl">BK POS</h2>
             <p className="text-sm text-muted-foreground">
-              Receipt #{receiptNumber}
+              Kuitansi #{receiptNumber}
             </p>
             <p className="text-sm text-muted-foreground">
               {format(date, 'dd/MM/yyyy HH:mm')}
@@ -104,15 +104,15 @@ export function Receipt({
           {/* Payment Info */}
           <div className="text-sm">
             <div className="flex justify-between">
-              <span>Payment Method</span>
-              <span className="uppercase">{paymentMethod}</span>
+              <span>Metode Pembayaran</span>
+              <span className="uppercase font-bold">{paymentMethod}</span>
             </div>
           </div>
 
           {/* Footer */}
           <div className="text-center text-sm text-muted-foreground pt-4">
-            <p>Terima Kasih banyak Atas Pembeliannya</p>
-            <p className="text-xs">Please keep this receipt for any returns</p>
+            <p>Terima Kasih banyak atas Pembeliannya</p>
+            <p className="text-xs">Hangatkan Semangatmu Adem kan Hatimu</p>
           </div>
         </div>
       </CardContent>
