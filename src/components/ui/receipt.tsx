@@ -111,7 +111,7 @@ export function Receipt({
 
           {/* Footer */}
           <div className="text-center text-sm text-muted-foreground pt-4">
-            <p>Thank you for your purchase!</p>
+            <p>Terima Kasih banyak Atas Pembeliannya</p>
             <p className="text-xs">Please keep this receipt for any returns</p>
           </div>
         </div>
