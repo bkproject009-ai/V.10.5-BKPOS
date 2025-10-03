@@ -265,9 +265,8 @@ const POS = () => {
         open={showReceipt} 
         onOpenChange={(open) => {
           setShowReceipt(open);
-          if (!open && isMobile) {
-            // Navigate back to POS page when closing receipt on mobile
-            navigate('/pos');
+          if (!open) {
+            clearCart(); // Clear the cart when closing the receipt
           }
         }}
       >
@@ -291,9 +290,7 @@ const POS = () => {
               variant="outline" 
               onClick={() => {
                 setShowReceipt(false);
-                if (isMobile) {
-                  navigate('/pos');
-                }
+                clearCart(); // Clear the cart when closing manually
               }}
             >
               Tutup
@@ -302,6 +299,11 @@ const POS = () => {
               onClick={() => {
                 if (receiptRef.current) {
                   window.print();
+                  // Close receipt dialog after printing
+                  setTimeout(() => {
+                    setShowReceipt(false);
+                    clearCart(); // Clear the cart after printing
+                  }, 500);
                 }
               }}
               className="bg-gradient-to-r from-primary to-primary/80"
