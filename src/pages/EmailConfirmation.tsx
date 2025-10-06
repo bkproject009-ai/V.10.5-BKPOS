@@ -1,13 +1,37 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react";
+import { Mail, AlertCircle, CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { useState } from "react";
+import { toast } from "@/hooks/use-toast";
 
 export default function EmailConfirmation() {
   const navigate = useNavigate();
+  const [isResending, setIsResending] = useState(false);
   const email = sessionStorage.getItem("pendingConfirmationEmail");
+
+  const handleResendEmail = async () => {
+    try {
+      setIsResending(true);
+      // Simulasi pengiriman ulang email (ganti dengan API call yang sebenarnya)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      toast({
+        title: "Email Verifikasi Terkirim",
+        description: "Silakan periksa kotak masuk email Anda",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Gagal Mengirim Email",
+        description: "Terjadi kesalahan. Silakan coba lagi nanti.",
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
@@ -54,24 +78,34 @@ export default function EmailConfirmation() {
           </Table>
 
           <div className="space-y-4">
-            <Button 
-              variant="default" 
-              className="w-full"
-              onClick={() => {
-                const emailDomain = email?.split('@')[1];
-                if (emailDomain) {
-                  window.open(`https://${emailDomain}`, '_blank');
-                }
-              }}
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              Open Email Provider
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="default" 
+                className="flex-1"
+                onClick={() => {
+                  const emailDomain = email?.split('@')[1];
+                  if (emailDomain) {
+                    window.open(`https://${emailDomain}`, '_blank');
+                  }
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Buka Email
+              </Button>
 
-            <Alert className="bg-muted">
-              <CheckCircle2 className="h-4 w-4" />
+              <Button
+                variant="outline"
+                disabled={isResending}
+                onClick={handleResendEmail}
+              >
+                <RefreshCw className={`h-4 w-4 ${isResending ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+
+            <Alert className="bg-muted border-primary/50">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
               <AlertDescription className="text-sm">
-                Already verified your email? Click below to login
+                Sudah memverifikasi email? Klik tombol di bawah untuk login
               </AlertDescription>
             </Alert>
             
@@ -81,8 +115,18 @@ export default function EmailConfirmation() {
               onClick={() => navigate('/login')}
             >
               <ArrowRight className="mr-2 h-4 w-4" />
-              Return to Login
+              Kembali ke Login
             </Button>
+
+            <div className="text-center text-sm text-muted-foreground">
+              <p>Butuh bantuan? Hubungi support kami di</p>
+              <a 
+                href="mailto:support@bkpos.com" 
+                className="text-primary hover:text-primary/80"
+              >
+                support@bkpos.com
+              </a>
+            </div>
           </div>
         </CardContent>
       </Card>

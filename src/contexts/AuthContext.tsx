@@ -70,35 +70,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  const signIn = async (identifier: string, password: string): Promise<void> => {
+    const signIn = async (email: string, password: string) => {
     try {
-      const isEmail = identifier.includes('@');
-      let loginEmail = identifier;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
 
-      if (!isEmail) {
-        const { data, error } = await supabase
+      if (data.user) {
+        // Get user role from users table
+        const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('email')
-          .eq('username', identifier)
+          .select('role')
+          .eq('id', data.user.id)
           .single();
 
-        if (error || !data) {
-          toast({
-            variant: "default",
-            title: "Informasi Login",
-            description: "Username tidak ditemukan. Silakan periksa kembali.",
+        if (!userError && userData) {
+          // Update session with role
+          await supabase.auth.updateUser({
+            data: { role: userData.role }
           });
-          return;
+          
+          // Refresh the session to get updated metadata
+          const { data: { session: newSession } } = await supabase.auth.refreshSession();
+          if (newSession) {
+            // Force reload the page to ensure all role-based components update
+            window.location.reload();
+          }
         }
-        loginEmail = data.email;
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({ 
-        email: loginEmail, 
-        password 
-      });
-      
-      if (error) {
+      }      if (error) {
         if (error.message.includes('Email not confirmed')) {
           toast({
             variant: 'default',
@@ -199,13 +199,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Sign up with Supabase Auth
+      // Check if this is the first user (will be admin)
+      const { count: userCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true });
+      
+      const isFirstUser = userCount === 0;
+      const assignedRole = isFirstUser ? 'admin' : (data.role || 'cashier');
+
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
             username: data.username,
-            full_name: data.fullName
+            full_name: data.fullName,
+            role: assignedRole
           }
         }
       });

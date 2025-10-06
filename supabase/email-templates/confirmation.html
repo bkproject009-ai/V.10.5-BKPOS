@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Verify Your Email - BKPOS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 32px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .title {
+            color: #1a1a1a;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin: 0;
+        }
+        .alert {
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2563eb;
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 500;
+            margin: 16px 0;
+        }
+        .button:hover {
+            background-color: #1d4ed8;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .support {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .steps {
+            margin: 24px 0;
+            padding-left: 24px;
+        }
+        .steps li {
+            margin-bottom: 8px;
+            color: #374151;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Verify Your Email</h1>
+            <p class="subtitle">Thank you for registering with BKPOS</p>
+        </div>
+
+        <div class="alert">
+            <strong>Email Verification Required</strong>
+            <p>Your account has been created, but needs to be verified before you can log in.</p>
+        </div>
+
+        <p>Hello,</p>
+        <p>Please click the button below to verify your email address:</p>
+
+        <div style="text-align: center;">
+            <a href="{{ .ConfirmationURL }}" class="button">Verify Email Address</a>
+        </div>
+
+        <div class="steps">
+            <strong>Next Steps:</strong>
+            <ol>
+                <li>Click the verification button above</li>
+                <li>You will be redirected to BKPOS</li>
+                <li>Log in to access your account</li>
+            </ol>
+        </div>
+
+        <p>Or copy and paste this URL into your browser:</p>
+        <p style="word-break: break-all; color: #666;">{{ .ConfirmationURL }}</p>
+
+        <div class="footer">
+            <p>Need help? Contact our support team at:</p>
+            <a href="mailto:support@bkpos.com" class="support">support@bkpos.com</a>
+            <p>© 2025 BKPOS. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
