@@ -24,11 +24,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { InfoCircledIcon } from '@radix-ui/react-icons';
 
-const ROLES = [
-  { value: 'cashier', label: 'Kasir' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'admin', label: 'Admin' },
-];
+
 
 export default function SignUp() {
   const navigate = useNavigate();
@@ -219,26 +215,7 @@ export default function SignUp() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, role: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
 
             <div className="flex items-center space-x-2">
               <Checkbox

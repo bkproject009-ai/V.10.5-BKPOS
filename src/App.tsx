@@ -24,6 +24,7 @@ import KasirFront from "@/pages/KasirFront";
 import Login from "@/pages/Login";
 import SignUp from "@/pages/SignUp";
 import EmailConfirmation from "@/pages/EmailConfirmation";
+import UserManagement from "@/pages/UserManagement";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 
@@ -67,6 +68,11 @@ const App = () => (
                     <Route path="reports" element={
                       <ProtectedRoute allowedRoles={['admin', 'manager']}>
                         <Reports />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="user-management" element={
+                      <ProtectedRoute allowedRoles={['admin']}>
+                        <UserManagement />
                       </ProtectedRoute>
                     } />
                     

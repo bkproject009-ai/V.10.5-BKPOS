@@ -1,7 +1,15 @@
--- Create products table
-create table products (
+create table if not exists users (
   id uuid default gen_random_uuid() primary key,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  email text unique not null,
+  username varchar(255) unique,
+  phone_number varchar(20),
+  address text,
+  full_name varchar(255),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table if not exists products (
+  id uuid default gen_random_uuid() primary key,
   name text not null,
   price numeric(10,2) not null,
   stock integer not null,
@@ -11,10 +19,8 @@ create table products (
   image text
 );
 
--- Create sales table
-create table sales (
+create table if not exists sales (
   id uuid default gen_random_uuid() primary key,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   subtotal numeric(10,2) not null,
   tax_amount numeric(10,2) not null,
   total numeric(10,2) not null,
@@ -52,7 +58,8 @@ create table sales_taxes (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Create trigger to update updated_at
+-- Drop trigger if exists to avoid duplicate error
+drop trigger if exists update_tax_types_updated_at on tax_types;
 create or replace function update_updated_at_column()
 returns trigger as $$
 begin
@@ -66,6 +73,7 @@ create trigger update_tax_types_updated_at
   for each row
   execute function update_updated_at_column();
 
--- Insert default tax (PPN 11%)
+-- Pastikan kolom code ada sebelum insert
+ALTER TABLE tax_types ADD COLUMN IF NOT EXISTS code text unique;
 insert into tax_types (code, name, description, rate) 
 values ('PPN', 'Pajak Pertambahan Nilai', 'PPN Indonesia', 11.00);

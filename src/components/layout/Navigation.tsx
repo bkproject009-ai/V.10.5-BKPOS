@@ -9,6 +9,7 @@ import {
   Store,
   LogOut,
   User,
+  Users,
   Menu
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +56,9 @@ const Navigation = () => {
     }
   };
 
+  // Check if user is admin
+  const isAdmin = user?.user_metadata?.role === 'admin';
+
   const navItems = [
     {
       path: '/',
@@ -85,7 +89,13 @@ const Navigation = () => {
       path: '/profile',
       label: 'Profile',
       icon: User
-    }
+    },
+    // Only show user management for admin
+    ...(isAdmin ? [{
+      path: '/user-management',
+      label: 'Manajemen User',
+      icon: Users
+    }] : [])
   ];
 
   const NavigationItems = () => (

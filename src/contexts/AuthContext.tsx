@@ -77,28 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password: password,
       });
 
-      if (data.user) {
-        // Get user role from users table
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', data.user.id)
-          .single();
-
-        if (!userError && userData) {
-          // Update session with role
-          await supabase.auth.updateUser({
-            data: { role: userData.role }
-          });
-          
-          // Refresh the session to get updated metadata
-          const { data: { session: newSession } } = await supabase.auth.refreshSession();
-          if (newSession) {
-            // Force reload the page to ensure all role-based components update
-            window.location.reload();
-          }
-        }
-      }      if (error) {
+      if (error) {
         if (error.message.includes('Email not confirmed')) {
           toast({
             variant: 'default',
@@ -199,14 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Sign up with Supabase Auth
-      // Check if this is the first user (will be admin)
-      const { count: userCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
-      
-      const isFirstUser = userCount === 0;
-      const assignedRole = isFirstUser ? 'admin' : (data.role || 'cashier');
-
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -214,7 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             username: data.username,
             full_name: data.fullName,
-            role: assignedRole
+            role: 'cashier' // Default to cashier, will be overridden by trigger if first user
           }
         }
       });
@@ -257,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: data.fullName,
             phone_number: data.phoneNumber,
             address: data.address,
-            role: data.role || 'cashier',
+            role: 'cashier' // Default to cashier, will be overridden by database trigger if first user
           },
         ]);
 
