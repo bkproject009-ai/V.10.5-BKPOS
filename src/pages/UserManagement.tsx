@@ -40,6 +40,8 @@ const UserManagement = () => {
   const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingRoleChanges, setPendingRoleChanges] = useState<Record<string, string>>({});
+  const [savingRole, setSavingRole] = useState<Record<string, boolean>>({});
 
   // Redirect if not admin
   if (!authLoading && (!user || user.user_metadata?.role !== 'admin')) {
@@ -86,24 +88,30 @@ const UserManagement = () => {
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ role: newRole })
-        .eq('id', userId);
+      // Call the secure function to update user role
+      const { data, error } = await supabase
+        .rpc('update_user_role', {
+          target_user_id: userId,
+          new_role: newRole
+        });
 
-      if (updateError) throw updateError;
+      if (error) {
+        console.error('Error updating role:', error);
+        throw new Error('Gagal mengubah role pengguna: ' + error.message);
+      }
 
-      // Update auth metadata
-      const { error: authError } = await supabase.auth.admin.updateUserById(
-        userId,
-        { user_metadata: { role: newRole } }
-      );
-
-      if (authError) throw authError;
+      if (!data || !data.success) {
+        toast({
+          variant: 'destructive',
+          title: 'Gagal',
+          description: data?.message || 'Tidak dapat mengubah role pengguna',
+        });
+        return;
+      }
 
       toast({
         title: 'Sukses',
-        description: 'Role pengguna berhasil diperbarui.',
+        description: data.message || 'Role pengguna berhasil diperbarui.',
       });
 
       // Refresh user list
@@ -180,30 +188,59 @@ const UserManagement = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.username}</TableCell>
-                  <TableCell>{user.full_name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
+              users.map((userData) => (
+                <TableRow key={userData.id}>
+                  <TableCell>{userData.username}</TableCell>
+                  <TableCell>{userData.full_name}</TableCell>
+                  <TableCell>{userData.email}</TableCell>
                   <TableCell>
-                    <Select
-                      defaultValue={user.role}
-                      onValueChange={(value) => updateUserRole(user.id, value)}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="cashier">Kasir</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={pendingRoleChanges[userData.id] || userData.role}
+                        onValueChange={(value) => {
+                          setPendingRoleChanges({
+                            ...pendingRoleChanges,
+                            [userData.id]: value
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="cashier">Kasir</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {pendingRoleChanges[userData.id] !== undefined && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          disabled={savingRole[userData.id]}
+                          onClick={async () => {
+                            setSavingRole({ ...savingRole, [userData.id]: true });
+                            await updateUserRole(userData.id, pendingRoleChanges[userData.id]);
+                            setSavingRole({ ...savingRole, [userData.id]: false });
+                            // Clear the pending change after successful update
+                            const newPendingChanges = { ...pendingRoleChanges };
+                            delete newPendingChanges[userData.id];
+                            setPendingRoleChanges(newPendingChanges);
+                          }}
+                        >
+                          {savingRole[userData.id] ? 'Menyimpan...' : 'Simpan'}
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button variant="destructive" size="sm">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={userData.id === user?.id}
+                        >
                           Hapus
                         </Button>
                       </DialogTrigger>
@@ -213,19 +250,12 @@ const UserManagement = () => {
                         </DialogHeader>
                         <div className="py-4">
                           <p>Apakah Anda yakin ingin menghapus pengguna ini?</p>
-                          <p className="text-sm text-muted-foreground mt-2">
-                            Username: {user.username}
-                            <br />
-                            Email: {user.email}
-                          </p>
+                          <p className="font-semibold">{userData.email}</p>
                         </div>
-                        <div className="flex justify-end gap-4">
-                          <DialogTrigger asChild>
-                            <Button variant="outline">Batal</Button>
-                          </DialogTrigger>
+                        <div className="flex justify-end gap-2">
                           <Button
                             variant="destructive"
-                            onClick={() => deleteUser(user.id)}
+                            onClick={() => deleteUser(userData.id)}
                           >
                             Hapus
                           </Button>
