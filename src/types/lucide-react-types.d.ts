@@ -16,4 +16,9 @@ declare module 'lucide-react' {
   export const History: Icon
   export const Trash2: Icon
   export const Package: Icon
+  export const Rows: Icon
+  export const ListOrdered: Icon
+  export const Grid: Icon
+  export const LayoutList: Icon
+  export const Database: Icon
 }

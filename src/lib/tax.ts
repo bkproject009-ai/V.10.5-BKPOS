@@ -36,35 +36,69 @@ export async function fetchTaxTypes(): Promise<TaxType[]> {
 }
 
 export async function addTaxType(taxType: Omit<TaxType, 'id'>): Promise<TaxType> {
-  const { data, error } = await supabase
-    .from('tax_types')
-    .insert([taxType])
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('tax_types')
+      .insert([taxType])
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error adding tax type:', error);
+      throw new Error(`Failed to add tax type: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Failed to create tax type or permission denied');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in addTaxType:', error);
+    throw error;
+  }
 }
 
 export async function updateTaxType(id: string, taxType: Partial<TaxType>): Promise<TaxType> {
-  const { data, error } = await supabase
-    .from('tax_types')
-    .update(taxType)
-    .eq('id', id)
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('tax_types')
+      .update(taxType)
+      .eq('id', id)
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error updating tax type:', error);
+      throw new Error(`Failed to update tax type: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Tax type not found or permission denied');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in updateTaxType:', error);
+    throw error;
+  }
 }
 
 export async function deleteTaxType(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('tax_types')
-    .delete()
-    .eq('id', id);
+  try {
+    const { error } = await supabase
+      .from('tax_types')
+      .delete()
+      .eq('id', id);
 
-  if (error) throw error;
+    if (error) {
+      console.error('Error deleting tax type:', error);
+      throw new Error(`Failed to delete tax type: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Error in deleteTaxType:', error);
+    throw error;
+  }
 }
 
 export async function calculateTaxes(subtotal: number): Promise<{ taxes: SaleTax[], total: number }> {

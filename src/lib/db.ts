@@ -13,17 +13,84 @@ export async function fetchProducts(): Promise<Product[]> {
 }
 
 export async function addProduct(product: Omit<Product, 'id'>): Promise<Product> {
+  try {
+    // First check if user is authenticated
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    if (authError) throw new Error('Authentication error: ' + authError.message);
+    if (!session) throw new Error('Anda harus login terlebih dahulu');
+
+    // Check if user is admin first
+    const { data: isAdmin, error: checkError } = await supabase
+      .rpc('is_admin');
+    
+    if (checkError) {
+      console.error('Error checking admin status:', checkError);
+      throw new Error('Gagal memeriksa izin admin');
+    }
+
+    if (!isAdmin) {
+      throw new Error('Anda tidak memiliki izin untuk menambah produk');
+    }
+
+    // Try to add the product
+    const { data: newProduct, error: insertError } = await supabase
+      .from('products')
+      .insert([product])
+      .select()
+      .single();
+    
+    if (insertError) {
+      console.error('Error inserting product:', insertError);
+      throw new Error('Gagal menambahkan produk');
+    }
+
+    if (!newProduct) {
+      throw new Error('Gagal menambahkan produk: Tidak ada data yang dikembalikan');
+    }
+
+    return newProduct;
+  } catch (error) {
+    console.error('Error in addProduct:', error);
+    throw error;
+  }
+
+  // Check JWT debug info
+  const { data: jwtDebug } = await supabase
+    .rpc('debug_jwt');
+  console.log('JWT Debug:', jwtDebug);
+
+  // Finally, try to add the product
   const { data, error } = await supabase
     .from('products')
     .insert([product])
     .select()
     .single();
   
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('SKU produk sudah digunakan. Mohon gunakan SKU yang berbeda.');
+    }
+    if (error.code === '42501') {
+      throw new Error('Anda tidak memiliki izin untuk menambah produk');
+    }
+    throw error;
+  }
+  
   return data;
 }
 
 export async function updateProduct(id: string, product: Partial<Product>): Promise<Product> {
+  // First check if user is authenticated
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  if (authError) throw new Error('Authentication error: ' + authError.message);
+  if (!session) throw new Error('Anda harus login terlebih dahulu');
+
+  // Then check if user has admin role
+  const { user } = session;
+  const isAdmin = user?.user_metadata?.role === 'admin';
+  if (!isAdmin) throw new Error('Hanya administrator yang dapat mengubah produk');
+
+  // Finally, try to update the product
   const { data, error } = await supabase
     .from('products')
     .update(product)
@@ -31,7 +98,16 @@ export async function updateProduct(id: string, product: Partial<Product>): Prom
     .select()
     .single();
   
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('SKU produk sudah digunakan. Mohon gunakan SKU yang berbeda.');
+    }
+    if (error.code === '42501') {
+      throw new Error('Anda tidak memiliki izin untuk mengubah produk');
+    }
+    throw error;
+  }
+  
   return data;
 }
 

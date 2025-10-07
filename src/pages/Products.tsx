@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePOS, Product } from '@/contexts/POSContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import {
   Minus,
@@ -57,6 +58,20 @@ import { toast } from '@/hooks/use-toast';
 const Products = () => {
   const posContext = usePOS();
   const { state, deleteProduct, addProduct, updateProduct } = posContext;
+  const { user } = useAuth();
+  const isAdmin = user?.user_metadata?.role === 'admin';
+  console.log('User auth state:', { user, metadata: user?.user_metadata, isAdmin });
+  
+  useEffect(() => {
+    if (!user) {
+      toast({
+        title: "Akses Ditolak",
+        description: "Anda harus login terlebih dahulu.",
+        variant: "destructive"
+      });
+      return;
+    }
+  }, [user]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -69,13 +84,14 @@ const Products = () => {
     note: ''
   });
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Omit<Product, 'id'>>({
     name: '',
     sku: '',
     price: 0,
     stock: 0,
     category: '',
-    description: ''
+    description: '',
+    image: undefined
   });
 
   const categories = ['all', ...Array.from(new Set(state.products.map(p => p.category)))];
@@ -87,12 +103,23 @@ const Products = () => {
       price: 0,
       stock: 0,
       category: '',
-      description: ''
+      description: '',
+      image: undefined
     });
     setEditingProduct(null);
+    setIsAddDialogOpen(false);
   };
 
   const handleEdit = (product: Product) => {
+    if (!isAdmin) {
+      toast({
+        title: "Akses Ditolak",
+        description: "Hanya administrator yang dapat mengubah produk.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setEditingProduct(product);
     setFormData({
       name: product.name,
@@ -106,6 +133,15 @@ const Products = () => {
   };
 
   const handleDelete = async (product: Product) => {
+    if (!isAdmin) {
+      toast({
+        title: "Akses Ditolak", 
+        description: "Hanya administrator yang dapat menghapus produk.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       await deleteProduct(product.id);
       toast({
@@ -152,27 +188,82 @@ const Products = () => {
             </DialogHeader>
             <form onSubmit={async (e) => {
               e.preventDefault();
+
+              if (!user) {
+                toast({
+                  title: "Akses Ditolak",
+                  description: "Anda harus login terlebih dahulu.",
+                  variant: "destructive"
+                });
+                return;
+              }
+
+              if (!isAdmin) {
+                toast({
+                  title: "Akses Ditolak",
+                  description: "Hanya administrator yang dapat menambah atau mengubah produk.",
+                  variant: "destructive"
+                });
+                return;
+              }
+
+              if (!formData.name || !formData.sku || formData.price === null || formData.stock === null || !formData.category) {
+                toast({
+                  title: "Data Tidak Lengkap",
+                  description: "Mohon lengkapi semua field yang diperlukan.",
+                  variant: "destructive"
+                });
+                return;
+              }
+
+              const productData = {
+                name: formData.name,
+                sku: formData.sku,
+                price: Number(formData.price),
+                stock: Number(formData.stock),
+                category: formData.category,
+                description: formData.description || ''
+              };
+
               try {
+                const finalProductData = {
+                  ...productData,
+                  price: Math.max(0, Number(productData.price)),
+                  stock: Math.max(0, Number(productData.stock))
+                };
+
                 if (editingProduct) {
-                  await updateProduct(editingProduct.id, formData);
+                  await updateProduct(editingProduct.id, finalProductData);
                   toast({
                     title: "Produk diperbarui",
-                    description: `${formData.name} telah diperbarui.`
+                    description: `${finalProductData.name} telah diperbarui.`
                   });
                 } else {
-                  await addProduct(formData);
+                  await addProduct(finalProductData);
                   toast({
                     title: "Produk ditambahkan",
-                    description: `${formData.name} telah ditambahkan ke katalog.`
+                    description: `${finalProductData.name} telah ditambahkan ke katalog.`
                   });
                 }
                 setIsAddDialogOpen(false);
                 resetForm();
               } catch (error) {
                 console.error('Error saving product:', error);
+                let errorMessage = "Terjadi kesalahan saat menyimpan produk.";
+                
+                if (error instanceof Error) {
+                  if (error.message.includes("duplicate key")) {
+                    errorMessage = "SKU produk sudah digunakan. Mohon gunakan SKU yang berbeda.";
+                  } else if (error.message.includes("permission denied")) {
+                    errorMessage = "Anda tidak memiliki izin untuk menambah produk. Pastikan Anda sudah login sebagai admin.";
+                  } else if (error.message.includes("not found")) {
+                    errorMessage = "Koneksi ke database gagal. Mohon coba lagi.";
+                  }
+                }
+                
                 toast({
                   title: "Gagal menyimpan produk",
-                  description: "Terjadi kesalahan saat menyimpan produk.",
+                  description: errorMessage,
                   variant: "destructive",
                 });
               }

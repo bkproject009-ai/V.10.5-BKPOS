@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { usePOS } from '@/contexts/POSContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Receipt } from '@/components/ui/receipt';
 import { MobileCart } from '@/components/ui/mobile-cart';
 import { DesktopCart } from '@/components/ui/desktop-cart';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Dialog,
   DialogContent,
@@ -23,16 +24,21 @@ import {
   CreditCard,
   Banknote,
   ShoppingCart,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 
 const POS = () => {
   const { state, addToCart, updateCartItem, removeFromCart, clearCart, completeSale, calculateTotals } = usePOS();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 

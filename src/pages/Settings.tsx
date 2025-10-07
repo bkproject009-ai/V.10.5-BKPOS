@@ -16,6 +16,8 @@ const Settings = () => {
   const { state } = usePOS();
   const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [taxName, setTaxName] = useState('');
+  const [taxRate, setTaxRate] = useState('');
 
   useEffect(() => {
     loadTaxTypes();
