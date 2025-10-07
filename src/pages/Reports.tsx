@@ -1,44 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePOS } from '@/contexts/POSContext';
-import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MetricCard } from '@/components/ui/metric-card';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  Download,
-  Eye,
-  DollarSign,
-  Package,
-  ShoppingCart,
-  CreditCard,
-} from 'lucide-react';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Download } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
-import { type Sale, type SaleProduct, type SaleItem, type SaleTax, type TaxType } from '@/types/reports';
-
-
 
 const Reports = () => {
   const navigate = useNavigate();
   const { session } = useAuth();
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState([]);
+  const [cashiers, setCashiers] = useState([]);
+  const [selectedCashier, setSelectedCashier] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
@@ -47,15 +37,38 @@ const Reports = () => {
       return;
     }
 
+    fetchCashiers();
     fetchSales();
   }, [session, navigate]);
+
+  const fetchCashiers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, username, full_name')
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+
+      setCashiers(data.map(user => ({
+        id: user.id,
+        name: user.full_name || user.username
+      })));
+    } catch (error) {
+      console.error('Error fetching cashiers:', error);
+      toast({
+        title: 'Error',
+        description: 'Gagal memuat data kasir',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const fetchSales = async () => {
     try {
       setIsLoading(true);
 
-      // Fetch sales with their related data
-      const { data, error } = await supabase
+      let query = supabase
         .from('sales')
         .select(`
           id,
@@ -64,16 +77,10 @@ const Reports = () => {
           tax_amount,
           total,
           payment_method,
-          sales_taxes (
+          cashier:users!cashier_id (
             id,
-            tax_type_id,
-            tax_amount,
-            tax_types (
-              id,
-              name,
-              rate,
-              enabled
-            )
+            username,
+            full_name
           ),
           sale_items (
             id,
@@ -83,502 +90,203 @@ const Reports = () => {
             product:products (
               id,
               name,
-              price,
               sku
             )
           )
         `)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        throw new Error(error.message);
+      if (selectedCashier !== 'all') {
+        query = query.eq('cashier_id', selectedCashier);
       }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
 
       setSales(data || []);
     } catch (error) {
       console.error('Error fetching sales:', error);
-      
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Gagal mengambil data penjualan',
         variant: 'destructive',
       });
-
-      if (error instanceof Error && error.message.includes('JWT')) {
-        navigate('/login', { replace: true });
-      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Calculate summary data with only enabled taxes
-  const totalRevenue = sales.reduce((sum, sale) => {
-    if (!sale) return sum;
+  useEffect(() => {
+    if (session?.access_token) {
+      fetchSales();
+    }
+  }, [selectedCashier]);
 
-    // Only include enabled taxes in revenue calculation
-    const taxAmount = (sale.sales_taxes || [])
-      .filter(tax => tax.tax_types?.enabled ?? false)
-      .reduce((taxSum, tax) => taxSum + (Number(tax.tax_amount) || 0), 0);
-    
-    const subtotal = (sale.sale_items || []).reduce((itemSum, item) => 
-      itemSum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);
-    
-    return sum + subtotal + taxAmount;
-  }, 0);
+  // Calculate summary statistics
+  const calculateStats = () => {
+    return sales.reduce((acc, sale) => ({
+      totalRevenue: acc.totalRevenue + Number(sale.total),
+      totalTransactions: acc.totalTransactions + 1,
+      totalItems: acc.totalItems + (sale.sale_items || []).reduce((sum, item) => sum + Number(item.quantity), 0),
+    }), {
+      totalRevenue: 0,
+      totalTransactions: 0,
+      totalItems: 0,
+    });
+  };
 
-  const totalTransactions = sales?.length || 0;
-  const totalItemsSold = (sales || []).reduce((sum, sale) => 
-    sum + (sale.sale_items || []).reduce((itemSum, item) => 
-      itemSum + (Number(item.quantity) || 0), 0), 0);
+  const stats = calculateStats();
 
-  // Calculate payment method stats
-  const paymentStats: Record<string, number> = (sales || []).reduce((acc, sale) => {
-    if (!sale?.payment_method) return acc;
-    const method = sale.payment_method;
-    acc[method] = (acc[method] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  // Calculate today's stats with only enabled taxes
-  const todayStats = (sales || []).filter(sale => {
-    if (!sale?.created_at) return false;
-    const saleDate = new Date(sale.created_at);
-    const today = new Date();
-    return (
-      saleDate.getDate() === today.getDate() &&
-      saleDate.getMonth() === today.getMonth() &&
-      saleDate.getFullYear() === today.getFullYear()
-    );
-  }).reduce((acc: { revenue: number; transactions: number; items: number }, sale) => {
-    // Only include enabled taxes in today's revenue
-    const taxAmount = (sale.sales_taxes || [])
-      .filter(tax => tax.tax_types?.enabled ?? false)
-      .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
-    
-    const subtotal = (sale.sale_items || []).reduce((sum, item) => 
-      sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);
-    
-    acc.revenue += subtotal + taxAmount;
-    acc.transactions += 1;
-    acc.items += (sale.sale_items || []).reduce(
-      (sum, item) => sum + (Number(item.quantity) || 0),
-      0
-    );
-    return acc;
-  }, { revenue: 0, transactions: 0, items: 0 });
-
-  // Format currency helper
-  const formatCurrency = (amount: number) => {
+  // Format currency
+  const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
-  // Calculate trends
-  const getTrendPercentage = (current: number, total: number) => {
-    if (total === 0 || current === 0) return 0;
-    return ((current / total) * 100);
-  };
+  // Generate CSV
+  const generateCSV = () => {
+    if (sales.length === 0) return;
 
-  const formatDateToLocale = (date: string) => {
-    return new Date(date).toLocaleDateString('id-ID');
-  };
+    const rows = [
+      ['Tanggal', 'Kasir', 'Total', 'Metode Pembayaran', 'Jumlah Item'],
+      ...sales.map(sale => [
+        new Date(sale.created_at).toLocaleString('id-ID'),
+        sale.cashier?.full_name || sale.cashier?.username,
+        sale.total,
+        sale.payment_method,
+        (sale.sale_items || []).reduce((sum, item) => sum + Number(item.quantity), 0)
+      ])
+    ];
 
-  // CSV Generation Functions
-  const generateProductCSV = (sales: Sale[]) => {
-    // Create a map to aggregate product sales
-    const productMap = new Map<string, { 
-      name: string;
-      productId: string;
-      quantity: number;
-      revenue: number;
-      price: number;
-      sku: string | null;
-      taxes: number;
-      subtotal: number;
-    }>();
-
-    sales.forEach(sale => {
-      // Only include enabled taxes
-      const totalTax = (sale.sales_taxes || [])
-        .filter(tax => tax.tax_types?.enabled ?? false)
-        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
-      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-      const taxPerItem = totalItems > 0 ? totalTax / totalItems : 0; // Distribute tax evenly across items
-
-      (sale.sale_items || []).forEach(item => {
-        if (!item.product_id || !item.product) return;
-        
-        const productId = item.product_id.toString();
-        const existing = productMap.get(productId) || {
-          name: item.product.name,
-          productId,
-          quantity: 0,
-          revenue: 0,
-          price: Number(item.price_at_time) || 0,
-          sku: item.product.sku,
-          taxes: 0,
-          subtotal: 0
-        };
-        
-        const quantity = Number(item.quantity) || 0;
-        const itemSubtotal = (Number(item.price_at_time) || 0) * quantity;
-        const itemTax = taxPerItem * quantity;
-
-        existing.quantity += quantity;
-        existing.subtotal += itemSubtotal;
-        existing.taxes += itemTax;
-        existing.revenue = existing.subtotal + existing.taxes;
-        
-        productMap.set(productId, existing);
-      });
-    });
-
-    const headers = [
-      'SKU',
-      'Nama Produk',
-      'Harga Satuan',
-      'Jumlah Terjual',
-      'Subtotal',
-      'Pajak',
-      'Total'
-    ].join(',');
-
-    const rows = Array.from(productMap.values())
-      .sort((a, b) => b.revenue - a.revenue)
-      .map(product => {
-        // Escape komma in product name to prevent CSV format issues
-        const escapedName = product.name.includes(',') ? `"${product.name}"` : product.name;
-        
-        return [
-          product.sku || product.productId,
-          escapedName,
-          formatCurrency(product.price),
-          product.quantity,
-          formatCurrency(product.subtotal),
-          formatCurrency(product.taxes),
-          formatCurrency(product.revenue)
-        ].join(',');
-      });
-
-    return [headers, ...rows].join('\n');
-  };
-
-  const generateSummaryCSV = (sales: Sale[]) => {
-    const headers = [
-      'Tanggal',
-      'No. Invoice',
-      'Nama Produk',
-      'Harga Satuan',
-      'Jumlah',
-      'Subtotal',
-      'Pajak',
-      'Total',
-      'Pembayaran',
-      'Kembalian'
-    ].join(',');
-
-    const rows = sales.flatMap(sale => {
-      // Only include enabled taxes
-      const taxes = (sale.sales_taxes || [])
-        .filter(tax => tax.tax_types?.enabled ?? false)
-        .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
-      const totalItems = (sale.sale_items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-      const taxPerItem = totalItems > 0 ? taxes / totalItems : 0; // Distribute tax evenly across items
-
-      const payment = Number(sale.total) || 0;
-      
-      return (sale.sale_items || []).map(item => {
-        if (!item.product) return null;
-        
-        const quantity = Number(item.quantity) || 0;
-        const price = Number(item.price_at_time) || 0;
-        const subtotal = price * quantity;
-        const itemTax = taxPerItem * quantity;
-        const total = subtotal + itemTax;
-
-        // Escape product name if it contains commas
-        const escapedName = item.product.name.includes(',') ? `"${item.product.name}"` : item.product.name;
-
-        return [
-          formatDateToLocale(sale.created_at),
-          sale.id,
-          escapedName,
-          formatCurrency(price),
-          quantity,
-          formatCurrency(subtotal),
-          formatCurrency(itemTax),
-          formatCurrency(total),
-          formatCurrency(payment),
-          formatCurrency(payment - total)
-        ].join(',');
-      });
-    }).filter(row => row !== null);
-
-    return [headers, ...rows].join('\n');
-  };
-
-  const downloadCSV = (content: string, filePrefix: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const csvContent = rows.map(row => row.join(',')).join('\\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filePrefix}-${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = \`laporan_penjualan_\${new Date().toISOString().split('T')[0]}.csv\`;
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
-
-  const downloadProductReport = () => {
-    const csvContent = generateProductCSV(sales);
-    downloadCSV(csvContent, 'ringkasan-per-produk');
-  };
-
-  const downloadSummaryReport = () => {
-    const csvContent = generateSummaryCSV(sales);
-    downloadCSV(csvContent, 'laporan-per-transaksi');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-          <p className="text-sm text-gray-600">Loading sales data...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Summary Section */}
-      <div>
-        <h2 className="text-2xl font-bold mb-4">Ringkasan Laporan</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* Total Revenue Card */}
-          <MetricCard
-            title="Total Pendapatan"
-            value={formatCurrency(totalRevenue)}
-            icon={<DollarSign />}
-            subValue={`Hari ini: ${formatCurrency(todayStats.revenue)}`}
-            trend={todayStats.revenue > 0 ? "up" : undefined}
-            trendValue={`${getTrendPercentage(todayStats.revenue, totalRevenue).toFixed(1)}%`}
-          />
-
-          {/* Transactions Card */}
-          <MetricCard
-            title="Total Transaksi"
-            value={totalTransactions}
-            icon={<ShoppingCart />}
-            subValue={`Hari ini: ${todayStats.transactions} transaksi`}
-            trend={todayStats.transactions > 0 ? "up" : undefined}
-            trendValue={`${getTrendPercentage(todayStats.transactions, totalTransactions).toFixed(1)}%`}
-          />
-
-          {/* Items Sold Card */}
-          <MetricCard
-            title="Total Item Terjual"
-            value={totalItemsSold}
-            icon={<Package />}
-            subValue={`Hari ini: ${todayStats.items} item`}
-            trend={todayStats.items > 0 ? "up" : undefined}
-            trendValue={`${getTrendPercentage(todayStats.items, totalItemsSold).toFixed(1)}%`}
-          />
-
-          {/* Payment Methods Card */}
-          <MetricCard
-            title="Metode Pembayaran"
-            value={`${paymentStats?.['cash'] || 0} Tunai`}
-            icon={<CreditCard />}
-            subValue={`${paymentStats?.['card'] || 0} Kartu • ${paymentStats?.['qris'] || 0} QRIS`}
-          />
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Laporan Penjualan</h1>
+        <div className="flex items-center gap-4">
+          <Select
+            value={selectedCashier}
+            onValueChange={setSelectedCashier}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Pilih Kasir" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Kasir</SelectItem>
+              {cashiers.map((cashier) => (
+                <SelectItem key={cashier.id} value={cashier.id}>
+                  {cashier.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={generateCSV} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Download CSV
+          </Button>
         </div>
       </div>
 
-      {/* Header with Download Buttons */}
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Daftar Transaksi</h2>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="gap-2">
-              <Download className="h-4 w-4" />
-              Download Laporan
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={downloadProductReport}>
-              Ringkasan Per Produk
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={downloadSummaryReport}>
-              Laporan Penjualan Per Transaksi
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Pendapatan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Transaksi
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalTransactions}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Item Terjual
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalItems}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Sales Table */}
       <Card>
+        <CardHeader>
+          <CardTitle>Riwayat Transaksi</CardTitle>
+        </CardHeader>
         <CardContent>
-          {sales.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Tidak ada data penjualan</p>
-            </div>
-          ) : (
-            <div className="relative overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID Transaksi</TableHead>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Pembayaran</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead className="w-[100px]">Aksi</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tanggal</TableHead>
+                <TableHead>Kasir</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Metode Pembayaran</TableHead>
+                <TableHead>Jumlah Item</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : sales.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    Tidak ada data penjualan
+                  </TableCell>
+                </TableRow>
+              ) : (
+                sales.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell>
+                      {new Date(sale.created_at).toLocaleDateString('id-ID', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </TableCell>
+                    <TableCell>{sale.cashier?.full_name || sale.cashier?.username}</TableCell>
+                    <TableCell>{formatCurrency(sale.total)}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {sale.payment_method}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {(sale.sale_items || []).reduce((sum, item) => sum + Number(item.quantity), 0)}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sales.map((sale) => {
-                    // Only include enabled taxes in the tax amount
-                    const taxAmount = (sale.sales_taxes || [])
-                      .filter(tax => tax.tax_types?.enabled ?? false)
-                      .reduce((sum, tax) => sum + (Number(tax.tax_amount) || 0), 0);
-
-                    const subtotal = (sale.sale_items || []).reduce((sum, item) => 
-                      sum + ((Number(item.price_at_time) || 0) * (Number(item.quantity) || 0)), 0);
-
-                    const total = subtotal + taxAmount;
-
-                    return (
-                      <TableRow key={sale.id} className="group">
-                        <TableCell className="font-medium">{sale.id}</TableCell>
-                        <TableCell>
-                          {new Date(sale.created_at).toLocaleString('id-ID')}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(total)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}
-                            className="capitalize"
-                          >
-                            {sale.payment_method === 'cash' ? 'Tunai' : 
-                             sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {(sale.sale_items || []).length} items
-                        </TableCell>
-                        <TableCell>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Detail Transaksi #{sale.id}</DialogTitle>
-                                <DialogDescription>
-                                  {new Date(sale.created_at).toLocaleString('id-ID')}
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <Card>
-                                    <CardContent className="pt-4">
-                                      <p className="text-sm font-medium mb-1">Total Transaksi</p>
-                                      <p className="text-2xl font-bold">
-                                        {formatCurrency(total)}
-                                      </p>
-                                    </CardContent>
-                                  </Card>
-                                  <Card>
-                                    <CardContent className="pt-4">
-                                      <p className="text-sm font-medium mb-1">Metode Pembayaran</p>
-                                      <Badge 
-                                        variant={sale.payment_method === 'cash' ? 'default' : 'secondary'}
-                                        className="capitalize"
-                                      >
-                                        {sale.payment_method === 'cash' ? 'Tunai' : 
-                                         sale.payment_method === 'qris' ? 'QRIS' : 'Kartu'}
-                                      </Badge>
-                                    </CardContent>
-                                  </Card>
-                                </div>
-                                
-                                <div>
-                                  <h4 className="text-sm font-medium mb-3">Detail Produk</h4>
-                                  <div className="space-y-2">
-                                    {(sale.sale_items || []).map((item, index) => (
-                                      <div key={index} className="flex justify-between items-center text-sm bg-muted/50 p-3 rounded">
-                                        <div>
-                                          <p className="font-medium">{item.product?.name || `Produk #${item.product_id}`}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {formatCurrency(Number(item.price_at_time))} × {item.quantity}
-                                          </p>
-                                        </div>
-                                        <p className="font-medium">
-                                          {formatCurrency(Number(item.price_at_time || 0) * Number(item.quantity || 0))}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {Array.isArray(sale.sales_taxes) && sale.sales_taxes.length > 0 && 
-                                 sale.sales_taxes.some(tax => tax.tax_types?.enabled) && (
-                                  <div>
-                                    <h4 className="text-sm font-medium mb-3">Rincian Pajak</h4>
-                                    <div className="space-y-2">
-                                      {sale.sales_taxes
-                                        .filter(tax => tax.tax_types?.enabled)
-                                        .map((tax, index) => (
-                                          <div key={`tax-${index}`} className="flex justify-between text-sm p-2 bg-muted/30 rounded">
-                                            <span>{tax.tax_types?.name || 'Pajak'} ({tax.tax_types?.rate || 0}%)</span>
-                                            <span className="font-medium">
-                                              {formatCurrency(Number(tax.tax_amount || 0))}
-                                            </span>
-                                          </div>
-                                        ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                <div className="border-t pt-4 space-y-2">
-                                  <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Subtotal</span>
-                                    <span>{formatCurrency(subtotal)}</span>
-                                  </div>
-                                  {taxAmount > 0 && (
-                                    <div className="flex justify-between text-sm">
-                                      <span className="text-muted-foreground">Total Pajak</span>
-                                      <span>{formatCurrency(taxAmount)}</span>
-                                    </div>
-                                  )}
-                                  <div className="flex justify-between text-lg font-bold pt-2">
-                                    <span>Total</span>
-                                    <span>{formatCurrency(total)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

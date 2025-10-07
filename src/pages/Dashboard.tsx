@@ -77,6 +77,36 @@ const Dashboard = () => {
   const totalRevenue = Array.isArray(state.sales) ? state.sales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0) : 0;
   const totalTransactions = Array.isArray(state.sales) ? state.sales.length : 0;
   const averageOrderValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+  // Calculate per-cashier statistics
+  const cashierStats = Array.isArray(state.sales) ? state.sales.reduce((acc, sale) => {
+    if (!sale.cashier) return acc;
+    
+    const cashierId = sale.cashier.id;
+    if (!acc[cashierId]) {
+      acc[cashierId] = {
+        id: cashierId,
+        name: sale.cashier.full_name || sale.cashier.username,
+        totalSales: 0,
+        totalRevenue: 0,
+        totalItems: 0
+      };
+    }
+
+    acc[cashierId].totalSales++;
+    acc[cashierId].totalRevenue += Number(sale.total) || 0;
+    acc[cashierId].totalItems += (sale.sale_items || []).reduce(
+      (sum, item) => sum + (Number(item.quantity) || 0), 0
+    );
+
+    return acc;
+  }, {} as Record<string, {
+    id: string;
+    name: string;
+    totalSales: number;
+    totalRevenue: number;
+    totalItems: number;
+  }>) : {};
   
   // Low stock products (stock < 10)
   const lowStockProducts = Array.isArray(state.products) ? state.products.filter(product => (Number(product.stock) || 0) < 10) : [];
@@ -190,6 +220,36 @@ const Dashboard = () => {
           );
         })}
       </div>
+
+      {/* Cashier Performance Section */}
+      <Card className="col-span-full">
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Kinerja Kasir</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.values(cashierStats).map((cashier) => (
+              <div key={cashier.id} className="bg-muted/20 p-4 rounded-lg">
+                <h3 className="font-semibold mb-2">{cashier.name}</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Transaksi:</span>
+                    <span>{cashier.totalSales}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Pendapatan:</span>
+                    <span>Rp{cashier.totalRevenue.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Item:</span>
+                    <span>{cashier.totalItems}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Best/Worst Selling Products */}
