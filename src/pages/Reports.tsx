@@ -4,6 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { format } from "date-fns";
+import { Calendar as CalendarIcon, Download } from 'lucide-react';
+import { Calendar } from "@/components/ui/calendar";
 import {
   Table,
   TableBody,
@@ -19,9 +22,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
+import { cn } from "@/lib/utils";
 
 const Reports = () => {
   const navigate = useNavigate();
@@ -30,6 +38,8 @@ const Reports = () => {
   const [cashiers, setCashiers] = useState([]);
   const [selectedCashier, setSelectedCashier] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
+  const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 7))); // Default to last 7 days
+  const [endDate, setEndDate] = useState(new Date());
   
   useEffect(() => {
     if (!session?.access_token) {
@@ -39,7 +49,7 @@ const Reports = () => {
 
     fetchCashiers();
     fetchSales();
-  }, [session, navigate]);
+  }, [session, navigate, startDate, endDate, selectedCashier]);
 
   const fetchCashiers = async () => {
     try {
@@ -68,6 +78,13 @@ const Reports = () => {
     try {
       setIsLoading(true);
 
+      // Set the time of startDate to beginning of day and endDate to end of day
+      const startDateTime = new Date(startDate);
+      startDateTime.setHours(0, 0, 0, 0);
+      
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+
       let query = supabase
         .from('sales')
         .select(`
@@ -94,6 +111,8 @@ const Reports = () => {
             )
           )
         `)
+        .gte('created_at', startDateTime.toISOString())
+        .lte('created_at', endDateTime.toISOString())
         .order('created_at', { ascending: false });
 
       if (selectedCashier !== 'all') {
@@ -167,15 +186,70 @@ const Reports = () => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `laporan_penjualan_${new Date().toISOString().split('T')[0]}.csv`;
+    const startDateStr = format(startDate, "yyyyMMdd");
+    const endDateStr = format(endDate, "yyyyMMdd");
+    link.download = `laporan_penjualan_${startDateStr}_${endDateStr}.csv`;
     link.click();
   };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Laporan Penjualan</h1>
-        <div className="flex items-center gap-4">
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Laporan Penjualan</h1>
+          <Button onClick={generateCSV} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Download CSV
+          </Button>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-4">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[200px] justify-start text-left font-normal",
+                  !startDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {startDate ? format(startDate, "PPP") : <span>Dari Tanggal</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[200px] justify-start text-left font-normal",
+                  !endDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {endDate ? format(endDate, "PPP") : <span>Sampai Tanggal</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
           <Select
             value={selectedCashier}
             onValueChange={setSelectedCashier}
@@ -192,10 +266,6 @@ const Reports = () => {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={generateCSV} className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Download CSV
-          </Button>
         </div>
       </div>
 
