@@ -36,7 +36,11 @@ interface User {
   created_at: string;
 }
 
-const UserManagement = () => {
+interface UserManagementProps {
+  hideTitle?: boolean;
+}
+
+const UserManagement = ({ hideTitle = false }: UserManagementProps) => {
   const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,10 +164,12 @@ const UserManagement = () => {
   };
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Manajemen Pengguna</h1>
+    <div className={!hideTitle ? "container mx-auto p-6" : ""}>
+      {!hideTitle && (
+        <h1 className="text-2xl font-bold mb-6">Manajemen Pengguna</h1>
+      )}
 
-      <div className="bg-white rounded-lg shadow">
+      <div className="rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePOS } from '@/contexts/POSContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,21 +8,312 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { Settings as SettingsIcon, Percent, Save, Plus, Trash2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Settings as SettingsIcon, Percent, Save, Plus, Trash2, Users, User } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import * as tax from '@/lib/tax';
 import type { TaxType } from '@/lib/tax';
+import UserManagement from './UserManagement';
+import Profile from './Profile';
 
-const Settings = () => {
+const TaxSettings = () => {
   const { state } = usePOS();
   const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [taxName, setTaxName] = useState('');
   const [taxRate, setTaxRate] = useState('');
 
+  const loadTaxTypes = async () => {
+    setIsLoading(true);
+    try {
+      const { data: { session }} = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Error",
+          description: "Please sign in to access settings",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const types = await tax.fetchTaxTypes();
+      if (Array.isArray(types)) {
+        setTaxTypes(types);
+        if (types.length > 0) {
+          toast({
+            description: `${types.length} tax type(s) loaded successfully`
+          });
+        } else {
+          toast({
+            title: "Warning",
+            description: "No tax types found. Creating default tax types...",
+            variant: "warning"
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Error loading tax types:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to load tax settings. Please check the database connection.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTaxToggle = async (id: string, enabled: boolean) => {
+    try {
+      await tax.updateTaxType(id, { enabled });
+      setTaxTypes(prev => prev.map(t => 
+        t.id === id ? { ...t, enabled } : t
+      ));
+      toast({
+        title: "Sukses",
+        description: `Pajak berhasil ${enabled ? 'diaktifkan' : 'dinonaktifkan'}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengubah status pajak",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUpdateTax = async (id: string, updates: Partial<TaxType>) => {
+    try {
+      const updatedTax = await tax.updateTaxType(id, updates);
+      setTaxTypes(prev => prev.map(t => 
+        t.id === id ? { ...t, ...updatedTax } : t
+      ));
+      toast({
+        title: "Sukses",
+        description: "Data pajak berhasil diperbarui",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal memperbarui data pajak",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddTax = async () => {
+    const newTax = {
+      code: '',
+      name: 'Pajak Baru',
+      description: '',
+      rate: 0,
+      enabled: false
+    };
+
+    try {
+      const addedTax = await tax.addTaxType(newTax);
+      setTaxTypes(prev => [...prev, addedTax]);
+      toast({
+        title: "Sukses",
+        description: "Pajak baru berhasil ditambahkan",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menambahkan pajak baru",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteTax = async (id: string) => {
+    try {
+      await tax.deleteTaxType(id);
+      setTaxTypes(prev => prev.filter(t => t.id !== id));
+      toast({
+        title: "Sukses",
+        description: "Pajak berhasil dihapus",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menghapus pajak",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     loadTaxTypes();
   }, []);
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-full">Loading...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center space-x-2">
+            <Percent className="h-5 w-5 text-primary" />
+            <span>Konfigurasi Pajak</span>
+          </CardTitle>
+          <Button size="sm" onClick={handleAddTax}>
+            <Plus className="h-4 w-4 mr-2" />
+            Tambah Pajak
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {taxTypes.map((taxType) => (
+            <div key={taxType.id} className="space-y-4 p-4 border rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-medium">
+                    {taxType.name}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {taxType.description || 'Tidak ada deskripsi'}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={taxType.enabled}
+                    onCheckedChange={(checked) => handleTaxToggle(taxType.id, checked)}
+                  />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => handleDeleteTax(taxType.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor={`code-${taxType.id}`}>Kode Pajak</Label>
+                  <Input
+                    id={`code-${taxType.id}`}
+                    value={taxType.code}
+                    onChange={(e) => handleUpdateTax(taxType.id, { code: e.target.value })}
+                    placeholder="cth: PPN"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`name-${taxType.id}`}>Nama Pajak</Label>
+                  <Input
+                    id={`name-${taxType.id}`}
+                    value={taxType.name}
+                    onChange={(e) => handleUpdateTax(taxType.id, { name: e.target.value })}
+                    placeholder="cth: Pajak Pertambahan Nilai"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor={`rate-${taxType.id}`}>Persentase (%)</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id={`rate-${taxType.id}`}
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={taxType.rate}
+                    onChange={(e) => handleUpdateTax(taxType.id, { rate: parseFloat(e.target.value) })}
+                    placeholder="0.00"
+                    className="pr-8"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <Percent className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor={`desc-${taxType.id}`}>Deskripsi</Label>
+                <Input
+                  id={`desc-${taxType.id}`}
+                  value={taxType.description || ''}
+                  onChange={(e) => handleUpdateTax(taxType.id, { description: e.target.value })}
+                  placeholder="Deskripsi optional"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const Settings = () => {
+  const [activeTab, setActiveTab] = useState("general");
+  const { user } = useAuth();
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex items-center space-x-3 mb-6">
+        <div className="bg-primary/10 p-3 rounded-full">
+          <SettingsIcon className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Pengaturan</h1>
+          <p className="text-muted-foreground">Konfigurasi sistem POS</p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="general" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="general" className="flex items-center gap-2">
+              <SettingsIcon className="h-4 w-4" />
+              Pengaturan Umum
+            </TabsTrigger>
+            {user?.user_metadata?.role === 'admin' && (
+              <TabsTrigger value="users" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Manajemen Pengguna
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="profile" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Profil
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="general" className="space-y-6">
+          <TaxSettings />
+        </TabsContent>
+
+        {user?.user_metadata?.role === 'admin' && (
+          <TabsContent value="users">
+            <Card>
+              <CardContent className="pt-6">
+                <UserManagement hideTitle />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        <TabsContent value="profile">
+          <Card>
+            <CardContent className="pt-6">
+              <Profile hideTitle />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 
   const loadTaxTypes = async () => {
     setIsLoading(true);

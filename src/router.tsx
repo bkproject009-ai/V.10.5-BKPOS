@@ -11,8 +11,6 @@ import NotFound from './pages/NotFound';
 import EmailConfirmation from './pages/EmailConfirmation';
 import StockManagement from './pages/StockManagement';
 import Reports from './pages/Reports';
-import UserManagement from './pages/UserManagement';
-
 import AppLayout from './components/layout/AppLayout';
 
 export const router = createBrowserRouter([
@@ -63,14 +61,6 @@ export const router = createBrowserRouter([
         )
       },
       {
-        path: 'profile',
-        element: (
-          <RoleBasedRoute>
-            <Profile />
-          </RoleBasedRoute>
-        )
-      },
-      {
         path: 'settings',
         element: (
           <RoleBasedRoute>
@@ -93,11 +83,7 @@ export const router = createBrowserRouter([
             <Reports />
           </RoleBasedRoute>
         )
-      },
-      {
-        path: 'user-management',
-        element: (
-          <RoleBasedRoute>
+      }
             <UserManagement />
           </RoleBasedRoute>
         )

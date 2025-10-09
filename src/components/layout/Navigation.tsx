@@ -84,18 +84,7 @@ const Navigation = () => {
       path: '/settings',
       label: 'Settings',
       icon: Settings
-    },
-    {
-      path: '/profile',
-      label: 'Profile',
-      icon: User
-    },
-    // Only show user management for admin
-    ...(isAdmin ? [{
-      path: '/user-management',
-      label: 'Manajemen User',
-      icon: Users
-    }] : [])
+    }
   ];
 
   const NavigationItems = () => (

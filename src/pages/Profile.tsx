@@ -1,24 +1,16 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Shield } from "lucide-react";
+import { UserIcon, Mail, Shield } from "lucide-react";
 
-export default function Profile() {
+interface ProfileProps {
+  hideTitle?: boolean;
+}
+
+export default function Profile({ hideTitle = false }: ProfileProps) {
   const { user } = useAuth();
   
   // Fungsi untuk mengambil data user dari API menggunakan Supabase client
@@ -79,62 +71,63 @@ export default function Profile() {
   const role = user.user_metadata?.role || 'user';
 
   return (
-    <div className="container mx-auto py-8">
-      <Card className="max-w-2xl mx-auto">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl">Profile</CardTitle>
-          <CardDescription>
-            Your account information and current role
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4 mb-6">
-            <Avatar className="h-20 w-20">
-              <AvatarFallback className="text-xl">
-                {getInitials(user.email || '')}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h2 className="text-xl font-semibold">{user.email?.split('@')[0]}</h2>
-              <Badge variant={getRoleBadgeVariant(role)}>
-                {formatRole(role)}
-              </Badge>
-            </div>
+    <div className={!hideTitle ? "container mx-auto py-8" : ""}>
+      <div className={!hideTitle ? "max-w-2xl mx-auto" : ""}>
+        {!hideTitle && (
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold">Profil</h2>
+            <p className="text-sm text-muted-foreground">
+              Informasi akun dan peran Anda
+            </p>
           </div>
+        )}
+        
+        <div className="flex items-center space-x-4 mb-6">
+          <Avatar className="h-20 w-20">
+            <AvatarFallback className="text-xl">
+              {getInitials(user.email || '')}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="text-xl font-semibold">{user.email?.split('@')[0]}</h2>
+            <Badge variant={getRoleBadgeVariant(role)}>
+              {formatRole(role)}
+            </Badge>
+          </div>
+        </div>
 
-          <Table>
-            <TableBody>
-              <TableRow>
-                <TableCell className="font-medium flex items-center">
-                  <Mail className="mr-2 h-4 w-4" />
-                  Email
-                </TableCell>
-                <TableCell>{user.email}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium flex items-center">
-                  <Shield className="mr-2 h-4 w-4" />
-                  Role
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getRoleBadgeVariant(role)}>
-                    {formatRole(role)}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium flex items-center">
-                  <User className="mr-2 h-4 w-4" />
-                  Account ID
-                </TableCell>
-                <TableCell className="font-mono text-sm">
-                  {user.id}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        <Table>
+          <TableBody>
+            <TableRow>
+              <TableCell className="font-medium flex items-center">
+                <Mail className="mr-2 h-4 w-4" />
+                Email
+              </TableCell>
+              <TableCell>{user.email}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="font-medium flex items-center">
+                <Shield className="mr-2 h-4 w-4" />
+                Role
+              </TableCell>
+              <TableCell>
+                <Badge variant={getRoleBadgeVariant(role)}>
+                  {formatRole(role)}
+                </Badge>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="font-medium flex items-center">
+                <UserIcon className="mr-2 h-4 w-4" />
+                Account ID
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {user.id}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
