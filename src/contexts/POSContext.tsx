@@ -211,12 +211,16 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
     case 'ADD_TO_CART': {
       const existingItem = state.cart.find(item => item.product.id === action.product.id);
       
+      // Get the current user's cashier stock
+      const cashierStock = action.product.cashier_stock ? 
+        Object.values(action.product.cashier_stock)[0] || 0 : 0;
+
       if (existingItem) {
         const newQuantity = existingItem.quantity + action.quantity;
-        if (newQuantity > (action.product.storage_stock || 0)) {
+        if (newQuantity > cashierStock) {
           toast({
-            title: "Insufficient Stock",
-            description: `Only ${action.product.stock} items available`,
+            title: "Stok Tidak Mencukupi",
+            description: `Stok tersedia: ${cashierStock} item`,
             variant: "destructive"
           });
           return state;
@@ -231,10 +235,10 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
           )
         };
       } else {
-        if (action.quantity > action.product.stock) {
+        if (action.quantity > cashierStock) {
           toast({
-            title: "Insufficient Stock",
-            description: `Only ${action.product.stock} items available`,
+            title: "Stok Tidak Mencukupi",
+            description: `Stok tersedia: ${cashierStock} item`,
             variant: "destructive"
           });
           return state;
@@ -256,10 +260,16 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       }
       
       const product = state.products.find(p => p.id === action.productId);
-      if (product && action.quantity > product.stock) {
+      if (!product) return state;
+
+      // Get the current user's cashier stock
+      const cashierStock = product.cashier_stock ? 
+        Object.values(product.cashier_stock)[0] || 0 : 0;
+
+      if (action.quantity > cashierStock) {
         toast({
-          title: "Insufficient Stock",
-          description: `Only ${product.stock} items available`,
+          title: "Stok Tidak Mencukupi",
+          description: `Stok tersedia: ${cashierStock} item`,
           variant: "destructive"
         });
         return state;
@@ -525,7 +535,17 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshProducts = async () => {
     try {
-      const products = await db.fetchProducts();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Tidak ada user yang login');
+
+      let products;
+      if (user.user_metadata?.role === 'admin') {
+        products = await db.fetchProducts();
+      } else {
+        const { fetchCashierProducts } = await import('@/lib/fetchCashierProducts');
+        products = await fetchCashierProducts();
+      }
+
       dispatch({ type: 'SET_PRODUCTS', products });
       return products;
     } catch (error) {

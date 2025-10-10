@@ -47,7 +47,9 @@ const POS = () => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.sku.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory && product.stock > 0;
+    const hasCashierStock = product.cashier_stock && 
+      Object.values(product.cashier_stock).some(stock => stock > 0);
+    return matchesSearch && matchesCategory && hasCashierStock;
   });
 
   // Get unique categories
@@ -161,7 +163,7 @@ const POS = () => {
                         Rp{product.price.toLocaleString('id-ID')}
                       </span>
                     <Badge variant="outline">
-                      {product.stock} stok
+                      Stok: {Object.values(product.cashier_stock || {})[0] || 0}
                     </Badge>
                   </div>
                 </CardContent>
