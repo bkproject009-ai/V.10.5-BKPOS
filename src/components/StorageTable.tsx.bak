@@ -1,0 +1,159 @@
+import { useState } from 'react';
+import { Product, usePOS } from '@/contexts/POSContext';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Plus, Minus, Package } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+
+export function StorageTable() {
+  const { state, updateProductStorage } = usePOS();
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState<number>(0);
+  const [isOpen, setIsOpen] = useState(false);
+  const [adjustmentType, setAdjustmentType] = useState<'add' | 'subtract'>('add');
+
+  const handleStockAdjustment = async () => {
+    if (!selectedProduct || quantity <= 0) return;
+
+    try {
+      await updateProductStorage(
+        selectedProduct.id,
+        adjustmentType === 'add' ? quantity : -quantity
+      );
+      setIsOpen(false);
+      setQuantity(0);
+      setSelectedProduct(null);
+    } catch (error) {
+      console.error('Error adjusting stock:', error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Stok Gudang</h2>
+        <Input
+          type="search"
+          placeholder="Cari produk..."
+          className="max-w-sm"
+        />
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nama Produk</TableHead>
+            <TableHead>SKU</TableHead>
+            <TableHead>Stok Gudang</TableHead>
+            <TableHead>Stok Total</TableHead>
+            <TableHead>Aksi</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {state.products.map((product) => (
+            <TableRow key={product.id}>
+              <TableCell>{product.name}</TableCell>
+              <TableCell>{product.sku}</TableCell>
+              <TableCell>{product.storage_stock || 0}</TableCell>
+              <TableCell>{product.stock}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Dialog open={isOpen && selectedProduct?.id === product.id} onOpenChange={(open) => {
+                    setIsOpen(open);
+                    if (!open) {
+                      setSelectedProduct(null);
+                      setQuantity(0);
+                    }
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setAdjustmentType('add');
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          {adjustmentType === 'add' ? 'Tambah' : 'Kurangi'} Stok Gudang
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Produk: {product.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Stok gudang saat ini: {product.storage_stock || 0}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Button
+                            variant={adjustmentType === 'add' ? 'default' : 'outline'}
+                            onClick={() => setAdjustmentType('add')}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Tambah
+                          </Button>
+                          <Button
+                            variant={adjustmentType === 'subtract' ? 'default' : 'outline'}
+                            onClick={() => setAdjustmentType('subtract')}
+                          >
+                            <Minus className="h-4 w-4 mr-2" />
+                            Kurangi
+                          </Button>
+                        </div>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={quantity}
+                          onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                          placeholder="Jumlah"
+                        />
+                        <Button onClick={handleStockAdjustment} disabled={quantity <= 0}>
+                          Simpan
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => {
+                      setSelectedProduct(product);
+                      setAdjustmentType('subtract');
+                      setIsOpen(true);
+                    }}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}

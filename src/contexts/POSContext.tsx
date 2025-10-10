@@ -7,16 +7,38 @@ import {
   calculateTotal,
   formatToRupiah
 } from '@/lib/calculations';
+import * as stockManagement from '@/lib/stockManagement';
+import { useAuth } from './AuthContext';
+import { supabase } from '@/lib/supabase';
+
+export interface CashierStock {
+  cashier_id: string;
+  product_id: string;
+  stock: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockDistribution {
+  id: string;
+  product_id: string;
+  cashier_id: string;
+  quantity: number;
+  distributed_by: string;
+  distributed_at: string;
+}
 
 export interface Product {
   id: string;
   name: string;
   price: number;
   stock: number;
+  warehouse_stock: number;
   category: string;
   sku: string;
   description?: string;
   image?: string;
+  cashier_stock: Record<string, number>;
 }
 
 export interface CartItem {
@@ -32,10 +54,17 @@ export interface TaxType {
 
 export interface SaleTax {
   id: string;
-  sale_id: string;
-  tax_type_id: string;
-  tax_amount: number;
+  saleId: string;
+  taxTypeId: string;
+  taxAmount: number;
   tax_types?: TaxType;
+}
+
+export interface TaxType {
+  id: string;
+  name: string;
+  rate: number;
+  enabled?: boolean;
 }
 
 export interface SaleItem {
@@ -60,7 +89,13 @@ export interface Sale {
   sales_taxes: SaleTax[];
 }
 
-
+export interface Cashier {
+  id: string;
+  email: string;
+  username?: string;
+  full_name?: string;
+  role: string;
+}
 
 export interface TaxSettings {
   taxTypes: TaxType[];
@@ -70,6 +105,7 @@ interface POSState {
   products: Product[];
   cart: CartItem[];
   sales: Sale[];
+  cashiers: Cashier[];
   taxSettings: TaxSettings;
   isLoading: boolean;
   error: string | null;
@@ -80,6 +116,7 @@ type POSAction =
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_PRODUCTS'; products: Product[] }
   | { type: 'SET_SALES'; sales: Sale[] }
+  | { type: 'SET_CASHIERS'; cashiers: Cashier[] }
   | { type: 'SET_TAX_SETTINGS'; taxSettings: TaxSettings }
   | { type: 'ADD_PRODUCT'; product: Product }
   | { type: 'UPDATE_PRODUCT'; id: string; product: Partial<Product> }
@@ -92,59 +129,11 @@ type POSAction =
   | { type: 'UPDATE_SALE'; id: string; sale: Partial<Sale> }
   | { type: 'DELETE_SALE'; id: string };
 
-// Sample seed data
-const initialProducts: Product[] = [
-  {
-    id: '1',
-    name: 'Premium Coffee Beans',
-    price: 24.99,
-    stock: 50,
-    category: 'Beverages',
-    sku: 'BEV-001',
-    description: 'High-quality arabica coffee beans'
-  },
-  {
-    id: '2',
-    name: 'Organic Green Tea',
-    price: 15.99,
-    stock: 30,
-    category: 'Beverages',
-    sku: 'BEV-002',
-    description: 'Premium organic green tea leaves'
-  },
-  {
-    id: '3',
-    name: 'Chocolate Croissant',
-    price: 4.50,
-    stock: 15,
-    category: 'Bakery',
-    sku: 'BAK-001',
-    description: 'Fresh baked chocolate croissant'
-  },
-  {
-    id: '4',
-    name: 'Blueberry Muffin',
-    price: 3.75,
-    stock: 8,
-    category: 'Bakery',
-    sku: 'BAK-002',
-    description: 'Homemade blueberry muffin'
-  },
-  {
-    id: '5',
-    name: 'Caesar Salad',
-    price: 12.99,
-    stock: 20,
-    category: 'Food',
-    sku: 'FOO-001',
-    description: 'Fresh caesar salad with parmesan'
-  }
-];
-
 const initialState: POSState = {
   products: [],
   cart: [],
   sales: [],
+  cashiers: [],
   taxSettings: {
     taxTypes: []
   },
@@ -154,6 +143,12 @@ const initialState: POSState = {
 
 const posReducer = (state: POSState, action: POSAction): POSState => {
   switch (action.type) {
+    case 'SET_CASHIERS':
+      return {
+        ...state,
+        cashiers: action.cashiers
+      };
+
     case 'ADD_PRODUCT':
       return {
         ...state,
@@ -164,7 +159,16 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       return {
         ...state,
         products: state.products.map(p =>
-          p.id === action.id ? { ...p, ...action.product } : p
+          p.id === action.id 
+            ? { 
+                ...p, 
+                ...action.product,
+                // Preserve warehouse_stock if not explicitly updated
+                warehouse_stock: action.product.warehouse_stock !== undefined 
+                  ? action.product.warehouse_stock 
+                  : p.warehouse_stock
+              } 
+            : p
         )
       };
 
@@ -304,17 +308,19 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
 
 interface POSContextType {
   state: POSState;
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
+  addProduct: (product: Partial<Product>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   addToCart: (product: Product, quantity: number) => void;
-  updateCartItem: (productId: string, quantity: number) => void;
+  updateCartItem: (product: Product, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
-  completeSale: (paymentMethod: 'cash' | 'card' | 'qris') => void;
-  updateSale: (id: string, sale: Partial<Sale>) => void;
-  deleteSale: (id: string) => void;
-  calculateTotals: () => { subtotal: number; taxes: { id: string; saleId: string; taxTypeId: string; taxAmount: number; }[]; total: number };
+  completeSale: (sale: Sale) => Promise<void>;
+  updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
+  calculateTotals: () => { subtotal: number, taxes: SaleTax[], total: number };
+  updateProductStorage: (productId: string, quantity: number) => Promise<void>;
+  distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -327,14 +333,16 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     const loadInitialData = async () => {
       dispatch({ type: 'SET_LOADING', loading: true });
       try {
-        const [products, sales, taxTypes] = await Promise.all([
+        const [products, sales, cashiers, taxTypes] = await Promise.all([
           db.fetchProducts(),
           db.fetchSales(),
+          db.fetchCashiers(),
           db.getTaxTypes()
         ]);
 
         dispatch({ type: 'SET_PRODUCTS', products });
         dispatch({ type: 'SET_SALES', sales });
+        dispatch({ type: 'SET_CASHIERS', cashiers });
         dispatch({ 
           type: 'SET_TAX_SETTINGS', 
           taxSettings: { taxTypes } 
@@ -378,12 +386,12 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       dispatch({ type: 'UPDATE_PRODUCT', id, product: updatedProduct });
       toast({
         title: "Produk Diperbarui",
-        description: "Data produk berhasil diperbarui",
+        description: "Perubahan berhasil disimpan",
       });
     } catch (error) {
       toast({
         title: "Gagal Memperbarui Produk",
-        description: "Terjadi kesalahan saat memperbarui produk. Pastikan data valid dan produk masih tersedia.",
+        description: "Terjadi kesalahan saat memperbarui produk",
         variant: "destructive"
       });
       throw error;
@@ -394,14 +402,10 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     try {
       await db.deleteProduct(id);
       dispatch({ type: 'DELETE_PRODUCT', id });
-      toast({
-        title: "Produk Dihapus",
-        description: "Produk berhasil dihapus",
-      });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Gagal menghapus produk",
+        title: "Gagal Menghapus Produk",
+        description: "Terjadi kesalahan saat menghapus produk",
         variant: "destructive"
       });
       throw error;
@@ -412,8 +416,8 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     dispatch({ type: 'ADD_TO_CART', product, quantity });
   };
 
-  const updateCartItem = (productId: string, quantity: number) => {
-    dispatch({ type: 'UPDATE_CART_ITEM', productId, quantity });
+  const updateCartItem = (product: Product, quantity: number) => {
+    dispatch({ type: 'UPDATE_CART_ITEM', productId: product.id, quantity });
   };
 
   const removeFromCart = (productId: string) => {
@@ -424,101 +428,51 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     dispatch({ type: 'CLEAR_CART' });
   };
 
-  const completeSale = async (paymentMethod: 'cash' | 'card' | 'qris') => {
-    const { subtotal, taxes, total } = calculateTotals();
-    
+  const calculateTotals = () => {
+    const subtotal = calculateSubtotal(state.cart);
+    const enabledTaxTypes = state.taxSettings.taxTypes.filter(tax => tax.enabled);
+    const taxes = enabledTaxTypes.map(tax => ({
+      id: crypto.randomUUID(),
+      saleId: '',
+      taxTypeId: tax.id,
+      taxAmount: calculateTaxAmount(subtotal, tax),
+      tax_types: tax
+    }));
+    const total = calculateTotal(subtotal, enabledTaxTypes);
+
+    return { subtotal, taxes, total };
+  };
+
+  const completeSale = async (sale: Sale) => {
     try {
-      // Validasi total
-      if (total <= 0) {
-        throw new Error('Total transaksi tidak valid');
-      }
-      // Validasi keranjang
-      if (state.cart.length === 0) {
-        throw new Error("Keranjang belanja masih kosong. Silakan tambahkan produk terlebih dahulu.");
-      }
-
-      // Validasi stok
-      const stockErrors = state.cart.filter(item => {
-        const currentProduct = state.products.find(p => p.id === item.product.id);
-        return currentProduct && item.quantity > currentProduct.stock;
-      });
-
-      if (stockErrors.length > 0) {
-        const errorProducts = stockErrors.map(item => {
-          const currentStock = state.products.find(p => p.id === item.product.id)?.stock || 0;
-          return `${item.product.name} (Stok tersisa: ${currentStock}, Permintaan: ${item.quantity})`;
-        }).join('\n');
-        
-        throw new Error(`Stok tidak mencukupi untuk produk berikut:\n${errorProducts}`);
-      }
-
-      const sale = await db.createSale(state.cart, subtotal, taxes, total, paymentMethod);
+      const newSale = await db.createSale(
+        state.cart,
+        sale.subtotal,
+        sale.sales_taxes,
+        sale.total,
+        sale.payment_method
+      );
       
-      // Update local products state with new stock values
-      const updatedProducts = state.products.map(product => {
-        const cartItem = state.cart.find(item => item.product.id === product.id);
-        if (cartItem) {
-          return {
-            ...product,
-            stock: product.stock - cartItem.quantity
-          };
-        }
-        return product;
-      });
-      
-      dispatch({ type: 'SET_PRODUCTS', products: updatedProducts });
-      dispatch({ type: 'ADD_SALE', sale });
-      dispatch({ type: 'CLEAR_CART' });
-
-      const paymentMethods = {
-        cash: 'Tunai',
-        card: 'Kartu',
-        qris: 'QRIS'
-      };
-
-      toast({
-        title: "Transaksi Berhasil",
-        description: `Pembayaran via ${paymentMethods[paymentMethod]} sebesar Rp${total.toLocaleString('id-ID')} telah selesai.\nStruk akan dicetak otomatis.`,
-      });
-      
-      // Update local products stock
-      state.cart.forEach(item => {
-        dispatch({
-          type: 'UPDATE_PRODUCT',
-          id: item.product.id,
-          product: { stock: item.product.stock - item.quantity }
-        });
-      });
-
-      toast({
-        title: "Transaksi Selesai",
-        description: "Pembayaran berhasil diproses",
-        variant: "default"
-      });
+      dispatch({ type: 'ADD_SALE', sale: newSale });
+      clearCart();
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Gagal memproses transaksi",
+        title: "Gagal Menyimpan Transaksi",
+        description: "Terjadi kesalahan saat menyimpan transaksi",
         variant: "destructive"
       });
       throw error;
     }
   };
 
-
-
   const updateSale = async (id: string, sale: Partial<Sale>) => {
     try {
-      await db.updateSale(id, sale);
-      dispatch({ type: 'UPDATE_SALE', id, sale });
-      toast({
-        title: "Transaksi Diperbarui",
-        description: "Data transaksi berhasil diperbarui",
-      });
+      const updatedSale = await db.updateSale(id, sale);
+      dispatch({ type: 'UPDATE_SALE', id, sale: updatedSale });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Gagal memperbarui transaksi",
+        title: "Gagal Memperbarui Transaksi",
+        description: "Terjadi kesalahan saat memperbarui transaksi",
         variant: "destructive"
       });
       throw error;
@@ -529,39 +483,60 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     try {
       await db.deleteSale(id);
       dispatch({ type: 'DELETE_SALE', id });
-      toast({
-        title: "Transaksi Dihapus",
-        description: "Data transaksi berhasil dihapus",
-      });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Gagal menghapus transaksi",
+        title: "Gagal Menghapus Transaksi",
+        description: "Terjadi kesalahan saat menghapus transaksi",
         variant: "destructive"
       });
       throw error;
     }
   };
 
-  const calculateTotals = () => {
-    const subtotal = state.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    let total = subtotal;
-    const taxes = state.taxSettings.taxTypes
-      .filter(tax => tax.enabled)
-      .map(tax => {
-        const taxAmount = (subtotal * tax.rate) / 100;
-        total += taxAmount;
-        return {
-          id: '',
-          saleId: '',
-          taxTypeId: tax.id,
-          taxAmount
-        };
+  const updateProductStorage = async (productId: string, quantity: number) => {
+    try {
+      await stockManagement.updateStorageStock(productId, quantity);
+      // Refresh products after updating storage
+      const products = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products });
+      toast({
+        title: "Stok Diperbarui",
+        description: "Perubahan stok gudang berhasil disimpan",
       });
-    return { subtotal, taxes, total };
+    } catch (error) {
+      toast({
+        title: "Gagal Memperbarui Stok",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan saat memperbarui stok",
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
-  const contextValue: POSContextType = {
+  const distributeStock = async (productId: string, cashierId: string, quantity: number) => {
+    try {
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      if (!currentUser) throw new Error('No authenticated user');
+      
+      await stockManagement.distributeStock(productId, cashierId, quantity, currentUser.id);
+      // Refresh products after distribution
+      const products = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products });
+      toast({
+        title: "Stok Didistribusikan",
+        description: "Distribusi stok ke kasir berhasil",
+      });
+    } catch (error) {
+      toast({
+        title: "Gagal Mendistribusikan Stok",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan saat mendistribusikan stok",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
+  const value = {
     state,
     addProduct,
     updateProduct,
@@ -573,20 +548,22 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     completeSale,
     updateSale,
     deleteSale,
-    calculateTotals
+    calculateTotals,
+    updateProductStorage,
+    distributeStock
   };
 
   return (
-    <POSContext.Provider value={contextValue}>
+    <POSContext.Provider value={value}>
       {children}
     </POSContext.Provider>
   );
 };
 
-export const usePOS = () => {
+export function usePOS() {
   const context = useContext(POSContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('usePOS must be used within a POSProvider');
   }
   return context;
-};
+}

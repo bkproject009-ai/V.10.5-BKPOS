@@ -1,50 +1,43 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 import * as db from '@/lib/db';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   calculateSubtotal,
   calculateTaxAmount,
   calculateTotal,
   formatToRupiah
 } from '@/lib/calculations';
+import * as stockManagement from '@/lib/stockManagement';
+import { useAuth } from './AuthContext';
+
+export interface CashierStock {
+  cashier_id: string;
+  product_id: string;
+  stock: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockDistribution {
+  id: string;
+  product_id: string;
+  cashier_id: string;
+  quantity: number;
+  distributed_by: string;
+  distributed_at: string;
+}
 
 export interface Product {
   id: string;
   name: string;
-  pri      // Validasi stok
-      const stockErrors = state.cart.filter(item => {
-        const currentProduct = state.products.find(p => p.id === item.product.id);
-        return currentProduct && item.quantity > currentProduct.stock;
-      });
-
-      if (stockErrors.length > 0) {
-        const errorProducts = stockErrors.map(item => {
-          const currentStock = state.products.find(p => p.id === item.product.id)?.stock || 0;
-          return `${item.product.name} (Stok tersisa: ${currentStock}, Permintaan: ${item.quantity})`;
-        }).join('\n');
-        
-        throw new Error(`Stok tidak mencukupi untuk produk berikut:\n${errorProducts}`);
-      }
-
-      const { userProfile } = useAuth();
-      
-      if (!userProfile) {
-        throw new Error('Mohon login terlebih dahulu');
-      }
-      
-      const sale = await db.createSale(
-        state.cart,
-        subtotal,
-        taxes,
-        total,
-        paymentMethod,
-        userProfile.id
-      );ock: number;
+  price: number;
+  stock: number;
+  storage_stock?: number;
   category: string;
   sku: string;
   description?: string;
   image?: string;
+  cashier_stock?: Record<string, number>;
 }
 
 export interface CartItem {
@@ -60,10 +53,17 @@ export interface TaxType {
 
 export interface SaleTax {
   id: string;
-  sale_id: string;
-  tax_type_id: string;
-  tax_amount: number;
+  saleId: string;
+  taxTypeId: string;
+  taxAmount: number;
   tax_types?: TaxType;
+}
+
+export interface TaxType {
+  id: string;
+  name: string;
+  rate: number;
+  enabled?: boolean;
 }
 
 export interface SaleItem {
@@ -332,17 +332,19 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
 
 interface POSContextType {
   state: POSState;
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
+  addProduct: (product: Partial<Product>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   addToCart: (product: Product, quantity: number) => void;
-  updateCartItem: (productId: string, quantity: number) => void;
+  updateCartItem: (product: Product, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
-  completeSale: (paymentMethod: 'cash' | 'card' | 'qris') => void;
-  updateSale: (id: string, sale: Partial<Sale>) => void;
-  deleteSale: (id: string) => void;
-  calculateTotals: () => { subtotal: number; taxes: { id: string; saleId: string; taxTypeId: string; taxAmount: number; }[]; total: number };
+  completeSale: (sale: Sale) => Promise<void>;
+  updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
+  calculateTotals: () => { subtotal: number, taxes: SaleTax[], total: number };
+  updateProductStorage: (productId: string, quantity: number) => Promise<void>;
+  distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -454,11 +456,6 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
 
   const completeSale = async (paymentMethod: 'cash' | 'card' | 'qris') => {
     const { subtotal, taxes, total } = calculateTotals();
-    const { userProfile } = useAuth();
-
-    if (!userProfile) {
-      throw new Error('User not authenticated');
-    }
     
     try {
       // Validasi total
@@ -485,20 +482,8 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(`Stok tidak mencukupi untuk produk berikut:\n${errorProducts}`);
       }
 
-      const { userProfile } = useAuth();
+      const sale = await db.createSale(state.cart, subtotal, taxes, total, paymentMethod);
       
-      if (!userProfile) {
-        throw new Error('User not authenticated');
-      }
-      
-      const sale = await db.createSale(
-        state.cart,
-        subtotal,
-        taxes,
-        total,
-        paymentMethod,
-        userProfile.id
-      );
       // Update local products state with new stock values
       const updatedProducts = state.products.map(product => {
         const cartItem = state.cart.find(item => item.product.id === product.id);
@@ -606,6 +591,50 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     return { subtotal, taxes, total };
   };
 
+  const { user } = useAuth();
+  
+  const updateProductStorage = async (productId: string, quantity: number) => {
+    try {
+      await stockManagement.updateStorageStock(productId, quantity);
+      const updatedProducts = await stockManagement.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products: updatedProducts });
+      toast({
+        title: "Stok Gudang Diperbarui",
+        description: "Berhasil memperbarui stok gudang",
+      });
+    } catch (error) {
+      console.error('Error updating storage stock:', error);
+      toast({
+        title: "Error",
+        description: "Gagal memperbarui stok gudang",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
+  const distributeStock = async (productId: string, cashierId: string, quantity: number) => {
+    if (!user) throw new Error('User not authenticated');
+    
+    try {
+      await stockManagement.distributeStock(productId, cashierId, quantity, user.id);
+      const updatedProducts = await stockManagement.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products: updatedProducts });
+      toast({
+        title: "Stok Didistribusikan",
+        description: "Berhasil mendistribusikan stok ke kasir",
+      });
+    } catch (error) {
+      console.error('Error distributing stock:', error);
+      toast({
+        title: "Error",
+        description: "Gagal mendistribusikan stok",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
   const contextValue: POSContextType = {
     state,
     addProduct,
@@ -618,7 +647,9 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     completeSale,
     updateSale,
     deleteSale,
-    calculateTotals
+    calculateTotals,
+    updateProductStorage,
+    distributeStock
   };
 
   return (

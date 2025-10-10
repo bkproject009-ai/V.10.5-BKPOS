@@ -10,22 +10,16 @@ export const calculateSubtotal = (cart: CartItem[]): number => {
   }, 0);
 };
 
-export const calculateTaxAmount = (subtotal: number, taxTypes: TaxType[]): {
-  taxes: Array<{ id: string; name: string; taxAmount: number }>;
-  totalTax: number;
-} => {
-  const taxes = taxTypes.map(tax => ({
-    id: tax.id,
-    name: tax.name,
-    taxAmount: Math.round((subtotal * tax.rate) / 100) // Pembulatan ke integer terdekat
-  }));
-
-  const totalTax = taxes.reduce((sum, tax) => sum + tax.taxAmount, 0);
-
-  return { taxes, totalTax };
+export const calculateTaxAmount = (subtotal: number, taxType: TaxType): number => {
+  return Math.round((subtotal * taxType.rate) / 100); // Pembulatan ke integer terdekat
 };
 
-export const calculateTotal = (subtotal: number, totalTax: number): number => {
+export const calculateTotalTax = (subtotal: number, taxTypes: TaxType[]): number => {
+  return taxTypes.reduce((sum, tax) => sum + calculateTaxAmount(subtotal, tax), 0);
+};
+
+export const calculateTotal = (subtotal: number, taxTypes: TaxType[]): number => {
+  const totalTax = calculateTotalTax(subtotal, taxTypes);
   return subtotal + totalTax;
 };
 

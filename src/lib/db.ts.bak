@@ -2,27 +2,6 @@ import { supabase } from './supabase';
 import type { Product, Sale, CartItem } from '@/contexts/POSContext';
 import type { TaxType, SaleTax } from './tax';
 
-// Cashier type definition
-export interface Cashier {
-  id: string;
-  email: string;
-  username?: string;
-  full_name?: string;
-  role: string;
-}
-
-// Fetch cashiers
-export async function fetchCashiers(): Promise<Cashier[]> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, email, username, full_name, role')
-    .eq('role', 'cashier')
-    .order('full_name', { ascending: true });
-  
-  if (error) throw error;
-  return data || [];
-}
-
 // Product Operations
 export async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await supabase
@@ -119,13 +98,36 @@ export async function updateProduct(id: string, product: Partial<Product>): Prom
     .select()
     .single();
   
-  if (error) throw error;
-  if (!data) throw new Error('Product not found');
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('SKU produk sudah digunakan. Mohon gunakan SKU yang berbeda.');
+    }
+    if (error.code === '42501') {
+      throw new Error('Anda tidak memiliki izin untuk mengubah produk');
+    }
+    throw error;
+  }
   
   return data;
 }
 
 export async function deleteProduct(id: string): Promise<void> {
+  // Check if product has any sales records
+  const { data: saleItems, error: checkError } = await supabase
+    .from('sale_items')
+    .select('id')
+    .eq('product_id', id)
+    .limit(1);
+    
+  if (checkError) throw checkError;
+  
+  if (saleItems && saleItems.length > 0) {
+    throw {
+      code: '23503',
+      message: 'Product has associated sales records'
+    };
+  }
+
   const { error } = await supabase
     .from('products')
     .delete()
@@ -142,29 +144,56 @@ export async function createSale(
   total: number,
   paymentMethod: string
 ): Promise<Sale> {
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  if (authError) throw new Error('Authentication error: ' + authError.message);
-  if (!session) throw new Error('Anda harus login terlebih dahulu');
-
   // Start a transaction
-  const { data: sale, error: saleError } = await supabase
+  // Get current user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error('User must be logged in to create a sale');
+
+  // First, create the sale record
+  const { data: saleData, error: saleError } = await supabase
     .from('sales')
     .insert([{
       subtotal,
       tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
       total,
       payment_method: paymentMethod,
-      cashier_id: session.user.id,
+      cashier_id: user.id,
+      status: 'completed'
     }])
     .select()
     .single();
 
   if (saleError) throw saleError;
-  if (!sale) throw new Error('Failed to create sale');
 
-  // Insert sale items
+  // Update product stocks
+  for (const item of items) {
+    // Get current stock
+    const { data: currentProduct, error: fetchError } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', item.product.id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const newStock = currentProduct.stock - item.quantity;
+    if (newStock < 0) {
+      throw new Error(`Insufficient stock for product ${item.product.name}`);
+    }
+
+    // Update stock
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ stock: newStock })
+      .eq('id', item.product.id);
+
+    if (updateError) throw updateError;
+  }
+
+  // Create sale items records
   const saleItems = items.map(item => ({
-    sale_id: sale.id,
+    sale_id: saleData.id,
     product_id: item.product.id,
     quantity: item.quantity,
     price_at_time: item.product.price
@@ -176,23 +205,25 @@ export async function createSale(
 
   if (itemsError) throw itemsError;
 
-  // Insert sale taxes
-  const saleTaxes = taxes.map(tax => ({
-    sale_id: sale.id,
-    tax_type_id: tax.taxTypeId,
-    tax_amount: tax.taxAmount
-  }));
+  // Create tax records if there are any
+  if (taxes.length > 0) {
+    const taxRecords = taxes.map(tax => ({
+      sale_id: saleData.id,
+      tax_type_id: tax.taxTypeId,
+      tax_amount: tax.taxAmount
+    }));
 
-  const { error: taxesError } = await supabase
-    .from('sales_taxes')
-    .insert(saleTaxes);
+    const { error: taxError } = await supabase
+      .from('sales_taxes')
+      .insert(taxRecords);
 
-  if (taxesError) throw taxesError;
+    if (taxError) throw taxError;
+  }
 
   return {
-    ...sale,
-    sale_items: saleItems,
-    sales_taxes: saleTaxes
+    ...saleData,
+    taxes,
+    items
   };
 }
 
@@ -231,7 +262,7 @@ export async function fetchSales(): Promise<Sale[]> {
     total: Number(sale.total || 0),
     payment_method: sale.payment_method,
     cashier_id: sale.cashier_id,
-    sale_items: Array.isArray(sale.sale_items) ? sale.sale_items.map(item => ({
+    items: Array.isArray(sale.sale_items) ? sale.sale_items.map(item => ({
       quantity: Number(item.quantity),
       price_at_time: Number(item.price_at_time),
       product_id: item.product_id
@@ -252,10 +283,8 @@ export async function updateSale(id: string, sale: Partial<Sale>): Promise<Sale>
     .eq('id', id)
     .select()
     .single();
-  
+
   if (error) throw error;
-  if (!data) throw new Error('Sale not found');
-  
   return data;
 }
 
@@ -264,7 +293,7 @@ export async function deleteSale(id: string): Promise<void> {
     .from('sales')
     .delete()
     .eq('id', id);
-  
+
   if (error) throw error;
 }
 
@@ -273,7 +302,7 @@ export async function getTaxTypes(): Promise<TaxType[]> {
   const { data, error } = await supabase
     .from('tax_types')
     .select('*');
-  
+
   if (error) throw error;
   return data || [];
 }

@@ -1,0 +1,139 @@
+import { supabase } from './supabase';
+import type { Product, Sale, CartItem } from '@/contexts/POSContext';
+import type { TaxType, SaleTax } from './tax';
+
+// Cashier type definition
+export interface Cashier {
+  id: string;
+  email: string;
+  username?: string;
+  full_name?: string;
+  role: string;
+}
+
+// Fetch cashiers
+export async function fetchCashiers(): Promise<Cashier[]> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, username, full_name, role')
+    .eq('role', 'cashier')
+    .order('full_name', { ascending: true });
+  
+  if (error) throw error;
+  return data || [];
+}
+
+// Product Operations
+export async function fetchProducts(): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      product_storage (storage_stock),
+      cashier_stock (cashier_id, stock)
+    `);
+  
+  if (error) throw error;
+
+  // Transform the data to include storage information
+  return (data || []).map(product => ({
+    ...product,
+    storage_stock: product.product_storage?.[0]?.storage_stock || 0,
+    cashier_stock: product.cashier_stock?.reduce((acc: Record<string, number>, cs: any) => {
+      acc[cs.cashier_id] = cs.stock;
+      return acc;
+    }, {}) || {}
+  }));
+}
+
+export async function addProduct(product: Omit<Product, 'id'>): Promise<Product> {
+  try {
+    // First check if user is authenticated
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    if (authError) throw new Error('Authentication error: ' + authError.message);
+    if (!session) throw new Error('Anda harus login terlebih dahulu');
+
+    // Check if user is admin first
+    const { data: isAdmin, error: checkError } = await supabase
+      .rpc('is_admin');
+    
+    if (checkError) {
+      console.error('Error checking admin status:', checkError);
+      throw new Error('Gagal memeriksa izin admin');
+    }
+
+    if (!isAdmin) {
+      throw new Error('Anda tidak memiliki izin untuk menambah produk');
+    }
+
+    // Try to add the product
+    const { data: newProduct, error: insertError } = await supabase
+      .from('products')
+      .insert([product])
+      .select(`
+        *,
+        product_storage (storage_stock),
+        cashier_stock (cashier_id, stock)
+      `)
+      .single();
+    
+    if (insertError) {
+      console.error('Error inserting product:', insertError);
+      throw new Error('Gagal menambahkan produk');
+    }
+
+    if (!newProduct) {
+      throw new Error('Gagal menambahkan produk: Tidak ada data yang dikembalikan');
+    }
+
+    // Transform the data to include storage information
+    return {
+      ...newProduct,
+      storage_stock: newProduct.product_storage?.[0]?.storage_stock || 0,
+      cashier_stock: newProduct.cashier_stock?.reduce((acc: Record<string, number>, cs: any) => {
+        acc[cs.cashier_id] = cs.stock;
+        return acc;
+      }, {}) || {}
+    };
+  } catch (error) {
+    console.error('Error in addProduct:', error);
+    throw error;
+  }
+}
+
+export async function updateProduct(id: string, product: Partial<Product>): Promise<Product> {
+  // First check if user is authenticated
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  if (authError) throw new Error('Authentication error: ' + authError.message);
+  if (!session) throw new Error('Anda harus login terlebih dahulu');
+
+  // Then check if user has admin role
+  const { user } = session;
+  const isAdmin = user?.user_metadata?.role === 'admin';
+  if (!isAdmin) throw new Error('Hanya administrator yang dapat mengubah produk');
+
+  // Finally, try to update the product
+  const { data, error } = await supabase
+    .from('products')
+    .update(product)
+    .eq('id', id)
+    .select(`
+      *,
+      product_storage (storage_stock),
+      cashier_stock (cashier_id, stock)
+    `)
+    .single();
+  
+  if (error) throw error;
+  if (!data) throw new Error('Product not found');
+  
+  // Transform the data to include storage information
+  return {
+    ...data,
+    storage_stock: data.product_storage?.[0]?.storage_stock || 0,
+    cashier_stock: data.cashier_stock?.reduce((acc: Record<string, number>, cs: any) => {
+      acc[cs.cashier_id] = cs.stock;
+      return acc;
+    }, {}) || {}
+  };
+}

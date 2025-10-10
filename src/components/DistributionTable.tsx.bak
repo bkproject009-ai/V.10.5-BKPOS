@@ -1,0 +1,177 @@
+import { useState } from 'react';
+import { Product, usePOS } from '@/contexts/POSContext';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Send, History } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface CashierStock {
+  cashier_id: string;
+  product_id: string;
+  stock: number;
+}
+
+export function DistributionTable() {
+  const { state, distributeStock } = usePOS();
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedCashier, setSelectedCashier] = useState<string>('');
+  const [quantity, setQuantity] = useState<number>(0);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleDistribute = async () => {
+    if (!selectedProduct || !selectedCashier || quantity <= 0) return;
+
+    try {
+      await distributeStock(selectedProduct.id, selectedCashier, quantity);
+      setIsOpen(false);
+      setQuantity(0);
+      setSelectedProduct(null);
+      setSelectedCashier('');
+    } catch (error) {
+      console.error('Error distributing stock:', error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Distribusi Stok</h2>
+        <Input
+          type="search"
+          placeholder="Cari produk..."
+          className="max-w-sm"
+        />
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nama Produk</TableHead>
+            <TableHead>SKU</TableHead>
+            <TableHead>Stok Gudang</TableHead>
+            <TableHead>Distribusi Stok</TableHead>
+            <TableHead>Aksi</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {state.products.map((product) => (
+            <TableRow key={product.id}>
+              <TableCell>{product.name}</TableCell>
+              <TableCell>{product.sku}</TableCell>
+              <TableCell>{product.storage_stock || 0}</TableCell>
+              <TableCell>
+                <div className="flex flex-col gap-1">
+                  {Object.entries(product.cashier_stock || {}).map(([cashierId, stock]) => {
+                    const cashier = state.cashiers.find(c => c.id === cashierId);
+                    return (
+                      <div key={cashierId} className="text-sm">
+                        {cashier?.full_name || cashier?.username}: {stock}
+                      </div>
+                    );
+                  })}
+                </div>
+              </TableCell>
+              <TableCell>
+                <Dialog open={isOpen && selectedProduct?.id === product.id} onOpenChange={(open) => {
+                  setIsOpen(open);
+                  if (!open) {
+                    setSelectedProduct(null);
+                    setQuantity(0);
+                    setSelectedCashier('');
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => setSelectedProduct(product)}
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Distribusi
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Distribusi Stok ke Kasir</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Produk: {product.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Stok gudang tersedia: {product.storage_stock || 0}
+                        </p>
+                      </div>
+                      <Select
+                        value={selectedCashier}
+                        onValueChange={setSelectedCashier}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kasir" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {state.cashiers.map((cashier) => (
+                              <SelectItem key={cashier.id} value={cashier.id}>
+                                {cashier.full_name || cashier.username}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={product.storage_stock || 0}
+                        value={quantity}
+                        onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                        placeholder="Jumlah"
+                      />
+                      <Button 
+                        onClick={handleDistribute} 
+                        disabled={!selectedCashier || quantity <= 0 || quantity > (product.storage_stock || 0)}
+                      >
+                        Distribusi
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 ml-2"
+                >
+                  <History className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}

@@ -12,6 +12,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { StorageTable } from '@/components/StorageTable';
 import { DistributionTable } from '@/components/DistributionTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -31,14 +32,7 @@ const Products = () => {
 
   const categories = ['all', ...Array.from(new Set(state.products.map(p => p.category)))];
 
-  const getTotalStock = (productId: string) => {
-    const product = state.products.find(p => p.id === productId);
-    if (!product) return 0;
-    const warehouseStock = product.warehouse_stock || 0;
-    const cashierStock = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0);
-    return warehouseStock + cashierStock;
-  };
-
+  // Filter products based on search and category
   const filteredProducts = state.products.filter(product => {
     const matchesSearch = 
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -49,6 +43,15 @@ const Products = () => {
 
     return matchesSearch && matchesCategory;
   });
+
+  // Calculate total stock for a product
+  const getTotalStock = (productId: string) => {
+    const product = state.products.find(p => p.id === productId);
+    if (!product) return 0;
+    const warehouseStock = product.warehouse_stock || 0;
+    const cashierStock = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0);
+    return warehouseStock + cashierStock;
+  };
 
   return (
     <div className="container mx-auto py-6">
