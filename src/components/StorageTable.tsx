@@ -25,31 +25,34 @@ import {
 import { toast } from '@/hooks/use-toast';
 
 export function StorageTable() {
-  const { state, addProduct, updateProductStorage } = usePOS();
+  const { state, addProduct, updateProductStorage, refreshProducts } = usePOS();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState<number>(0);
   const [isOpen, setIsOpen] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState<'add' | 'subtract'>('add');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Calculate total stock for a product including both warehouse and all cashier stocks
+  // Calculate total stock for a product including both storage and all cashier stocks
   const getTotalStock = (productId: string) => {
     const product = state.products.find(p => p.id === productId);
     if (!product) return 0;
     
-    const warehouseStock = product.warehouse_stock || 0;
+    const storageStock = product.storage_stock || 0;
     const cashierStocksTotal = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + (stock || 0), 0);
     
-    return warehouseStock + cashierStocksTotal;
+    return storageStock + cashierStocksTotal;
   };
   const [search, setSearch] = useState('');
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
-  const [newProductData, setNewProductData] = useState<Omit<Product, 'id'>>({
+  const [newProductData, setNewProductData] = useState<Omit<Product, 'id' | 'storage_stock' | 'cashier_stock' | 'total_stock'>>({
     name: '',
     sku: '',
     price: 0,
     category: '',
     description: '',
-    warehouse_stock: 0,
+    category: '',
+    description: '',
+    storage_stock: 0,
     cashier_stock: {},
   });
 
@@ -68,7 +71,7 @@ export function StorageTable() {
       return;
     }
 
-    if (adjustmentType === 'subtract' && (selectedProduct.warehouse_stock || 0) < quantity) {
+    if (adjustmentType === 'subtract' && (selectedProduct.storage_stock || 0) < quantity) {
       toast({
         title: "Stok tidak mencukupi",
         description: "Jumlah pengurangan melebihi stok yang tersedia",
@@ -83,19 +86,35 @@ export function StorageTable() {
       : `Pengurangan stok gudang: ${quantity} unit`;
 
     try {
-      await updateProductStorage(
+      setIsLoading(true);
+      console.log('Memulai penyesuaian stok:', {
+        productId: selectedProduct.id,
+        currentStock: selectedProduct.storage_stock,
+        adjustment: finalQuantity,
+        reason
+      });
+
+      const result = await updateProductStorage(
         selectedProduct.id,
         finalQuantity,
         reason
       );
+
+      // Refresh products list to update the UI
+      await refreshProducts();
+
+      console.log('Stok setelah penyesuaian:', {
+        productId: selectedProduct.id,
+        newStock: result.new_stock
+      });
       
       setIsOpen(false);
       setQuantity(0);
       setSelectedProduct(null);
       
       toast({
-        title: "Berhasil",
-        description: `Stok berhasil ${adjustmentType === 'add' ? 'ditambahkan' : 'dikurangi'}`,
+        title: "Stok Berhasil Diperbarui",
+        description: `Stok ${selectedProduct.name} sekarang: ${result.new_stock} unit`,
       });
     } catch (error) {
       console.error('Error adjusting stock:', error);
@@ -116,9 +135,7 @@ export function StorageTable() {
         sku: '',
         price: 0,
         category: '',
-        description: '',
-        warehouse_stock: 0,
-        cashier_stock: {},
+        description: ''
       });
       toast({
         title: 'Berhasil',
@@ -203,15 +220,7 @@ export function StorageTable() {
                   onChange={(e) => setNewProductData(prev => ({ ...prev, category: e.target.value }))}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="warehouse_stock">Stok Awal</Label>
-                <Input
-                  id="warehouse_stock"
-                  type="number"
-                  value={newProductData.warehouse_stock}
-                  onChange={(e) => setNewProductData(prev => ({ ...prev, warehouse_stock: parseInt(e.target.value) || 0 }))}
-                />
-              </div>
+              
               <div className="grid gap-2">
                 <Label htmlFor="description">Deskripsi</Label>
                 <Input

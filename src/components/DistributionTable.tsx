@@ -56,7 +56,7 @@ export function DistributionTable() {
       return;
     }
 
-    if (quantity > (selectedProduct.storage_stock || 0)) {
+    if (!selectedProduct.storage_stock || quantity > selectedProduct.storage_stock) {
       toast({
         title: "Stok tidak cukup",
         description: "Jumlah distribusi melebihi stok gudang yang tersedia.",
@@ -85,10 +85,13 @@ export function DistributionTable() {
     }
   };
 
-  const filteredProducts = state.products?.filter(product => 
+  const filteredProducts = (state.products || []).filter(product => 
     product.name.toLowerCase().includes(search.toLowerCase()) ||
     product.sku.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  ).map(product => ({
+    ...product,
+    total_cashier_stock: Object.values(product.cashier_stock || {}).reduce((sum, qty) => sum + qty, 0),
+  }));
 
   if (!Array.isArray(state.products) || !Array.isArray(cashiers)) {
     return (
@@ -123,7 +126,9 @@ export function DistributionTable() {
             <TableHead>Nama Produk</TableHead>
             <TableHead>SKU</TableHead>
             <TableHead>Stok Gudang</TableHead>
-            <TableHead>Distribusi Stok</TableHead>
+            <TableHead>Stok di Kasir</TableHead>
+            <TableHead>Total Stok</TableHead>
+            <TableHead>Distribusi</TableHead>
             <TableHead>Aksi</TableHead>
           </TableRow>
         </TableHeader>
@@ -144,7 +149,9 @@ export function DistributionTable() {
               <TableRow key={product.id}>
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.sku}</TableCell>
-                <TableCell>{product.storage_stock || 0}</TableCell>
+                <TableCell className="font-medium">{product.storage_stock || 0}</TableCell>
+                <TableCell>{product.total_cashier_stock}</TableCell>
+                <TableCell>{(product.storage_stock || 0) + product.total_cashier_stock}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
                     {Object.entries(product.cashier_stock || {}).map(([cashierId, stock]) => {

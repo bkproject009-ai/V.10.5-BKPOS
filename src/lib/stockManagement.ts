@@ -35,32 +35,96 @@ export interface StockDistribution {
 
 interface StockAdjustmentResponse {
   success: boolean;
-  previous_stock?: number;
-  new_stock?: number;
-  change?: number;
-  product_id?: string;
+  previous_stock: number;
+  new_stock: number;
+  change: number;
+  product?: any;
   error?: string;
-  quantity?: number;
 }
 
-// Storage functions with error handling
+// Storage functions with error handling and response validation
 export const updateStorageStock = async (productId: string, quantity: number, reason: string) => {
   try {
-    const { data, error } = await supabase.rpc('adjust_warehouse_stock', {
-      _product_id: productId,
+    console.log('Updating storage stock:', { productId, quantity, reason });
+
+    // Make sure productId is a valid UUID
+    if (!productId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      throw new Error('Invalid product ID format');
+    }
+
+    // Call the RPC function with explicit type casting
+    const { data, error } = await supabase.rpc('update_warehouse_stock', {
+      _product_id: productId as unknown as string,
       _quantity: quantity,
       _reason: reason
     });
 
-    if (error) throw error;
+    console.log('RPC response full data:', JSON.stringify({ data, error }, null, 2));
+
+    if (error) {
+      console.error('RPC error:', error);
+      throw new Error(`Database error: ${error.message}`);
+    }
 
     // Check response from the function
     const response = data as StockAdjustmentResponse;
-    if (!response.success) {
-      throw new Error(response.error || 'Gagal memperbarui stok gudang');
+    // Log the full response object for debugging
+    console.log('Response object:', JSON.stringify(response, null, 2));
+    
+    // Handle case where data is null or undefined
+    if (!data || !data.response) {
+      throw new Error('Tidak ada respon dari server');
     }
 
-    return response;
+    // Get the actual response object from the nested structure
+    const actualResponse = data.response;
+    
+    // Handle case where response is not in expected format
+    if (typeof actualResponse.success !== 'boolean') {
+      console.error('Invalid response format:', actualResponse);
+      throw new Error('Format respon dari server tidak valid');
+    }
+
+    // Handle failure case
+    if (!actualResponse.success) {
+      console.error('Stock adjustment failed:', actualResponse.error || 'Unknown error');
+      return {
+        success: false,
+        previous_stock: actualResponse.previous_stock || 0,
+        new_stock: actualResponse.new_stock || 0,
+        change: 0,
+        error: actualResponse.error || 'Gagal memperbarui stok gudang'
+      };
+    }
+
+    // Return success response
+    return {
+      success: true,
+      previous_stock: actualResponse.previous_stock,
+      new_stock: actualResponse.new_stock,
+      change: actualResponse.change,
+      error: null
+    };
+
+    // Immediately fetch the latest product data to ensure UI is up-to-date
+    const { data: updatedProduct, error: fetchError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching updated product:', fetchError);
+      throw new Error('Gagal memuat data produk terbaru');
+    }
+
+    return {
+      success: true,
+      previous_stock: response.previous_stock,
+      new_stock: updatedProduct.storage_stock,
+      change: quantity,
+      product: updatedProduct
+    };
   } catch (error) {
     console.error('Error updating storage stock:', error);
     throw error instanceof Error ? error : new Error('Gagal memperbarui stok gudang');
@@ -273,6 +337,29 @@ export const getLowStockAlerts = async (threshold: number = 10): Promise<{
   } catch (error) {
     console.error('Error getting low stock alerts:', error);
     throw new Error('Gagal mengambil data peringatan stok rendah');
+  }
+};
+
+// Get current warehouse stock for a product
+export const getWarehouseStock = async (productId: string): Promise<number> => {
+  try {
+    const { data, error } = await supabase
+      .from('product_storage')
+      .select('quantity')
+      .eq('product_id', productId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') { // Record not found
+        return 0;
+      }
+      throw error;
+    }
+
+    return data?.quantity || 0;
+  } catch (error) {
+    console.error('Error getting warehouse stock:', error);
+    throw new Error('Gagal mengambil data stok gudang');
   }
 };
 

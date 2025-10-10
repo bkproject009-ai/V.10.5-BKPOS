@@ -32,13 +32,14 @@ export interface Product {
   id: string;
   name: string;
   price: number;
-  stock: number;
-  warehouse_stock: number;
+  storage_stock: number;
   category: string;
   sku: string;
   description?: string;
   image?: string;
   cashier_stock: Record<string, number>;
+  total_stock?: number;
+  stock?: number; // For compatibility with cart operations
 }
 
 export interface CartItem {
@@ -115,6 +116,7 @@ interface POSContextType {
   state: POSState;
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  refreshProducts: () => Promise<Product[]>;
   deleteProduct: (id: string) => Promise<void>;
   addToCart: (product: Product, quantity?: number) => void;
   updateCartItem: (product: Product, quantity: number) => void;
@@ -124,7 +126,13 @@ interface POSContextType {
   updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
   calculateTotals: () => { subtotal: number; taxes: SaleTax[]; total: number };
-  updateProductStorage: (productId: string, quantity: number, reason: string) => Promise<void>;
+  updateProductStorage: (productId: string, quantity: number, reason: string) => Promise<{
+    success: boolean;
+    previous_stock: number;
+    new_stock: number;
+    change: number;
+    product: Product;
+  }>;
   distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
 }
 
@@ -180,10 +188,15 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
             ? { 
                 ...p, 
                 ...action.product,
-                // Preserve warehouse_stock if not explicitly updated
-                warehouse_stock: action.product.warehouse_stock !== undefined 
-                  ? action.product.warehouse_stock 
-                  : p.warehouse_stock
+                // Preserve storage_stock if not explicitly updated
+                storage_stock: action.product.storage_stock !== undefined 
+                  ? action.product.storage_stock 
+                  : p.storage_stock,
+                // Update total_stock calculation
+                total_stock: (action.product.storage_stock !== undefined 
+                  ? action.product.storage_stock 
+                  : p.storage_stock) + 
+                  Object.values(p.cashier_stock || {}).reduce((sum, qty) => sum + qty, 0)
               } 
             : p
         )
@@ -200,7 +213,7 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       
       if (existingItem) {
         const newQuantity = existingItem.quantity + action.quantity;
-        if (newQuantity > action.product.stock) {
+        if (newQuantity > (action.product.storage_stock || 0)) {
           toast({
             title: "Insufficient Stock",
             description: `Only ${action.product.stock} items available`,
@@ -510,17 +523,51 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const refreshProducts = async () => {
+    try {
+      const products = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products });
+      return products;
+    } catch (error) {
+      console.error('Error refreshing products:', error);
+      toast({
+        title: "Gagal memperbarui data",
+        description: "Terjadi kesalahan saat memuat ulang data produk",
+        variant: "destructive"
+      });
+      throw error;
+    }
+  };
+
   const updateProductStorage = async (productId: string, quantity: number, reason: string) => {
     try {
-      await stockManagement.updateStorageStock(productId, quantity, reason);
-      // Refresh products after updating storage
-      const products = await stockManagement.fetchProducts();
-      dispatch({ type: 'SET_PRODUCTS', products });
+      // Update stock and get the latest product data
+      const result = await stockManagement.updateStorageStock(productId, quantity, reason);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Gagal memperbarui stok');
+      }
+
+      // Get the updated product data
+      const products = await refreshProducts();
+      const updatedProduct = products.find(p => p.id === productId);
+      
+      if (!updatedProduct) {
+        throw new Error('Produk tidak ditemukan setelah pembaruan');
+      }
+
+      // Show success message with stock details
       toast({
         title: "Stok Diperbarui",
-        description: "Perubahan stok gudang berhasil disimpan",
+        description: `Stok berhasil diubah dari ${result.previous_stock} menjadi ${result.new_stock} unit`,
       });
+
+      return {
+        ...result,
+        product: updatedProduct
+      };
     } catch (error) {
+      console.error('Error in updateProductStorage:', error);
       toast({
         title: "Gagal Memperbarui Stok",
         description: error instanceof Error ? error.message : "Terjadi kesalahan saat memperbarui stok",
@@ -535,13 +582,23 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       const currentUser = (await supabase.auth.getUser()).data.user;
       if (!currentUser) throw new Error('No authenticated user');
       
+      // Get current stock information before distribution
+      const beforeStock = await stockManagement.getWarehouseStock(productId);
+      
+      // Distribute stock
       await stockManagement.distributeStock(productId, cashierId, quantity, currentUser.id);
-      // Refresh products after distribution
+      
+      // Get updated stock information
       const products = await db.fetchProducts();
+      const updatedProduct = products.find(p => p.id === productId);
+      
+      // Update state with new products data
       dispatch({ type: 'SET_PRODUCTS', products });
+      
+      // Show success message with stock details
       toast({
         title: "Stok Didistribusikan",
-        description: "Distribusi stok ke kasir berhasil",
+        description: `${quantity} unit berhasil didistribusikan. Sisa stok gudang: ${updatedProduct?.storage_stock || 0} unit`,
       });
     } catch (error) {
       toast({
@@ -560,6 +617,7 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       return result;
     },
     updateProduct,
+    refreshProducts,
     deleteProduct,
     addToCart,
     updateCartItem,

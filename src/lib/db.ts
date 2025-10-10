@@ -25,12 +25,46 @@ export async function fetchCashiers(): Promise<Cashier[]> {
 
 // Product Operations
 export async function fetchProducts(): Promise<Product[]> {
+  // Fetch products with their storage and cashier stocks
   const { data, error } = await supabase
     .from('products')
-    .select('*');
+    .select(`
+      *,
+      product_storage (
+        quantity,
+        updated_at
+      ),
+      cashier_stock (
+        cashier_id,
+        quantity,
+        updated_at
+      )
+    `)
+    .order('updated_at', { ascending: false });
   
   if (error) throw error;
-  return data || [];
+
+  // Transform the data to include storage_stock and cashier_stock
+  return (data || []).map(product => {
+    const storage_stock = Number(product.storage_stock || product.product_storage?.[0]?.quantity || 0);
+    const cashier_stocks = product.cashier_stock || [];
+    const cashier_stock = cashier_stocks.reduce((acc: Record<string, number>, stock: { cashier_id: string, quantity: number }) => {
+      acc[stock.cashier_id] = Number(stock.quantity || 0);
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Calculate total stock
+    const total_cashier_stock = Object.values(cashier_stock).reduce((sum: number, qty: number) => sum + qty, 0);
+    
+    const total_stock = storage_stock + Object.values(cashier_stock).reduce((sum: number, qty: number) => sum + qty, 0);
+
+    return {
+      ...product,
+      storage_stock,
+      cashier_stock,
+      total_stock
+    };
+  });
 }
 
 export async function addProduct(product: Omit<Product, 'id'>): Promise<Product> {
@@ -53,11 +87,25 @@ export async function addProduct(product: Omit<Product, 'id'>): Promise<Product>
       throw new Error('Anda tidak memiliki izin untuk menambah produk');
     }
 
+    // Prepare product data by removing invalid columns
+    const { cashier_stock, storage_stock, total_stock, ...validProductData } = product;
+
     // Try to add the product
     const { data: newProduct, error: insertError } = await supabase
       .from('products')
-      .insert([product])
-      .select()
+      .insert([validProductData])
+      .select(`
+        *,
+        product_storage (
+          quantity,
+          updated_at
+        ),
+        cashier_stock (
+          cashier_id,
+          quantity,
+          updated_at
+        )
+      `)
       .single();
     
     if (insertError) {
