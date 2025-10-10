@@ -111,6 +111,23 @@ interface POSState {
   error: string | null;
 }
 
+interface POSContextType {
+  state: POSState;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addToCart: (product: Product, quantity?: number) => void;
+  updateCartItem: (product: Product, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  completeSale: (sale: Sale) => Promise<void>;
+  updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
+  calculateTotals: () => { subtotal: number; taxes: SaleTax[]; total: number };
+  updateProductStorage: (productId: string, quantity: number, reason: string) => Promise<void>;
+  distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
+}
+
 type POSAction =
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null }
@@ -493,11 +510,11 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateProductStorage = async (productId: string, quantity: number) => {
+  const updateProductStorage = async (productId: string, quantity: number, reason: string) => {
     try {
-      await stockManagement.updateStorageStock(productId, quantity);
+      await stockManagement.updateStorageStock(productId, quantity, reason);
       // Refresh products after updating storage
-      const products = await db.fetchProducts();
+      const products = await stockManagement.fetchProducts();
       dispatch({ type: 'SET_PRODUCTS', products });
       toast({
         title: "Stok Diperbarui",
@@ -536,9 +553,12 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const value = {
+  const value: POSContextType = {
     state,
-    addProduct,
+    addProduct: async (product: Omit<Product, 'id'>) => {
+      const result = await addProduct(product);
+      return result;
+    },
     updateProduct,
     deleteProduct,
     addToCart,

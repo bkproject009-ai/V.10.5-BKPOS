@@ -33,19 +33,37 @@ export interface StockDistribution {
   };
 }
 
+interface StockAdjustmentResponse {
+  success: boolean;
+  previous_stock?: number;
+  new_stock?: number;
+  change?: number;
+  product_id?: string;
+  error?: string;
+  quantity?: number;
+}
+
 // Storage functions with error handling
-export const updateStorageStock = async (productId: string, quantity: number) => {
+export const updateStorageStock = async (productId: string, quantity: number, reason: string) => {
   try {
-    const { data, error } = await supabase.rpc('update_product_storage_stock', {
+    const { data, error } = await supabase.rpc('adjust_warehouse_stock', {
       _product_id: productId,
-      _quantity: quantity
+      _quantity: quantity,
+      _reason: reason
     });
 
     if (error) throw error;
-    return data;
+
+    // Check response from the function
+    const response = data as StockAdjustmentResponse;
+    if (!response.success) {
+      throw new Error(response.error || 'Gagal memperbarui stok gudang');
+    }
+
+    return response;
   } catch (error) {
     console.error('Error updating storage stock:', error);
-    throw new Error('Gagal memperbarui stok gudang');
+    throw error instanceof Error ? error : new Error('Gagal memperbarui stok gudang');
   }
 };
 
@@ -90,23 +108,33 @@ export const distributeStock = async (
 // Fetch products with complete stock information
 export const fetchProducts = async () => {
   try {
+    // First, get products with warehouse stock
     const { data: products, error } = await supabase
       .from('products')
-      .select(`
-        *,
-        product_storage(quantity),
-        cashier_stock(cashier_id, quantity)
-      `);
+      .select('*, product_storage(quantity)');
 
     if (error) throw error;
+
+    // Then, get cashier stock for all products
+    const { data: cashierStocks, error: cashierError } = await supabase
+      .from('cashier_stock')
+      .select('product_id, cashier_id, quantity');
+
+    if (cashierError) throw cashierError;
+
+    // Convert cashier stocks to a map for easier lookup
+    const cashierStockMap = cashierStocks?.reduce((acc, cs) => {
+      if (!acc[cs.product_id]) {
+        acc[cs.product_id] = {};
+      }
+      acc[cs.product_id][cs.cashier_id] = cs.quantity;
+      return acc;
+    }, {} as Record<string, Record<string, number>>);
 
     return products.map((product: any) => ({
       ...product,
       warehouse_stock: product.product_storage?.[0]?.quantity || 0,
-      cashier_stock: product.cashier_stock?.reduce((acc: Record<string, number>, cs: any) => {
-        acc[cs.cashier_id] = cs.quantity;
-        return acc;
-      }, {}) || {}
+      cashier_stock: cashierStockMap[product.id] || {}
     }));
   } catch (error) {
     console.error('Error fetching products:', error);

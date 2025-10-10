@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Product, usePOS } from '@/contexts/POSContext';
 import {
   Table,
@@ -25,11 +25,22 @@ import {
 import { toast } from '@/hooks/use-toast';
 
 export function StorageTable() {
-  const { state, addProduct, updateProduct, updateProductStorage } = usePOS();
+  const { state, addProduct, updateProductStorage } = usePOS();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState<number>(0);
   const [isOpen, setIsOpen] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState<'add' | 'subtract'>('add');
+
+  // Calculate total stock for a product including both warehouse and all cashier stocks
+  const getTotalStock = (productId: string) => {
+    const product = state.products.find(p => p.id === productId);
+    if (!product) return 0;
+    
+    const warehouseStock = product.warehouse_stock || 0;
+    const cashierStocksTotal = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + (stock || 0), 0);
+    
+    return warehouseStock + cashierStocksTotal;
+  };
   const [search, setSearch] = useState('');
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [newProductData, setNewProductData] = useState<Omit<Product, 'id'>>({
@@ -57,14 +68,35 @@ export function StorageTable() {
       return;
     }
 
+    if (adjustmentType === 'subtract' && (selectedProduct.warehouse_stock || 0) < quantity) {
+      toast({
+        title: "Stok tidak mencukupi",
+        description: "Jumlah pengurangan melebihi stok yang tersedia",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const finalQuantity = adjustmentType === 'add' ? quantity : -quantity;
+    const reason = adjustmentType === 'add' 
+      ? `Penambahan stok gudang: ${quantity} unit` 
+      : `Pengurangan stok gudang: ${quantity} unit`;
+
     try {
       await updateProductStorage(
         selectedProduct.id,
-        adjustmentType === 'add' ? quantity : -quantity
+        finalQuantity,
+        reason
       );
+      
       setIsOpen(false);
       setQuantity(0);
       setSelectedProduct(null);
+      
+      toast({
+        title: "Berhasil",
+        description: `Stok berhasil ${adjustmentType === 'add' ? 'ditambahkan' : 'dikurangi'}`,
+      });
     } catch (error) {
       console.error('Error adjusting stock:', error);
       toast({
@@ -229,8 +261,8 @@ export function StorageTable() {
               <TableRow key={product.id}>
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.sku}</TableCell>
-                <TableCell>{product.storage_stock || 0}</TableCell>
-                <TableCell>{product.stock}</TableCell>
+              <TableCell>{product.warehouse_stock || 0}</TableCell>
+              <TableCell>{getTotalStock(product.id)}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Dialog open={isOpen && selectedProduct?.id === product.id} onOpenChange={(open) => {
@@ -306,7 +338,10 @@ export function StorageTable() {
                           </Button>
                           <Button
                             onClick={handleStockAdjustment}
-                            disabled={quantity <= 0}
+                            disabled={
+                              quantity <= 0 || 
+                              (adjustmentType === 'subtract' && (selectedProduct?.warehouse_stock || 0) < quantity)
+                            }
                           >
                             {adjustmentType === 'add' ? 'Tambah' : 'Kurangi'} Stok
                           </Button>
