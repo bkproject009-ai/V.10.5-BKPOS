@@ -158,11 +158,21 @@ export const distributeStock = async (
       _cashier_id: cashierId,
       _quantity: quantity,
       _distributed_by: distributedBy,
-      _notes: notes
+      _notes: notes || ''
     });
 
+    console.log('Distribution response:', JSON.stringify({ data, error }, null, 2));
+
     if (error) throw error;
-    return data;
+    
+    // Get the actual response object from the nested structure
+    const response = data?.response;
+    
+    if (!response || !response.success) {
+      throw new Error(response?.error || 'Gagal mendistribusikan stok: Respon tidak valid');
+    }
+    
+    return response;
   } catch (error) {
     console.error('Error distributing stock:', error);
     throw error instanceof Error ? error : new Error('Gagal mendistribusikan stok');
