@@ -88,12 +88,50 @@ export async function addProduct(product: Omit<Product, 'id'>): Promise<Product>
     }
 
     // Prepare product data by removing invalid columns
-    const { cashier_stock, storage_stock, total_stock, ...validProductData } = product;
+    const { cashier_stock, storage_stock, total_stock, initial_stock, ...validProductData } = product;
 
-    // Try to add the product
+    // Begin transaction
     const { data: newProduct, error: insertError } = await supabase
       .from('products')
       .insert([validProductData])
+      .select('*')
+      .single();
+
+    if (insertError) throw insertError;
+    if (!newProduct) throw new Error('Gagal menambahkan produk: Tidak ada data yang dikembalikan');
+
+    // Add initial stock to product_storage if provided
+    if (initial_stock && initial_stock > 0) {
+      const { error: storageError } = await supabase
+        .from('product_storage')
+        .insert({
+          product_id: newProduct.id,
+          quantity: initial_stock,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (storageError) throw storageError;
+
+      // Record the initial stock addition
+      const { error: adjustmentError } = await supabase
+        .from('stock_adjustments')
+        .insert({
+          product_id: newProduct.id,
+          quantity: initial_stock,
+          type: 'addition',
+          reason: 'Stok awal produk',
+          location_type: 'warehouse',
+          adjusted_by: session.user.id,
+          adjusted_at: new Date().toISOString()
+        });
+
+      if (adjustmentError) throw adjustmentError;
+    }
+
+    // Get the complete product data with related information
+    const { data: productData, error: selectError } = await supabase
+      .from('products')
       .select(`
         *,
         product_storage (
@@ -106,18 +144,13 @@ export async function addProduct(product: Omit<Product, 'id'>): Promise<Product>
           updated_at
         )
       `)
+      .eq('id', newProduct.id)
       .single();
-    
-    if (insertError) {
-      console.error('Error inserting product:', insertError);
-      throw new Error('Gagal menambahkan produk');
-    }
 
-    if (!newProduct) {
-      throw new Error('Gagal menambahkan produk: Tidak ada data yang dikembalikan');
-    }
+    if (selectError) throw selectError;
+    if (!productData) throw new Error('Gagal mendapatkan data produk setelah penambahan');
 
-    return newProduct;
+    return productData;
   } catch (error) {
     console.error('Error in addProduct:', error);
     throw error;
