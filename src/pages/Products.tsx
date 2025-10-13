@@ -34,7 +34,7 @@ const Products = () => {
   const getTotalStock = (productId: string) => {
     const product = state.products.find(p => p.id === productId);
     if (!product) return 0;
-    const warehouseStock = product.warehouse_stock || 0;
+    const warehouseStock = product.storage_stock || 0;
     const cashierStock = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0);
     return warehouseStock + cashierStock;
   };
@@ -134,7 +134,7 @@ const Products = () => {
                             <Badge variant="outline">{product.category}</Badge>
                           </TableCell>
                           <TableCell className="text-right">{formatPrice(product.price)}</TableCell>
-                          <TableCell className="text-center">{product.warehouse_stock || 0}</TableCell>
+                          <TableCell className="text-center">{product.storage_stock || 0}</TableCell>
                           <TableCell className="text-center">
                             {Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0)}
                           </TableCell>

@@ -52,13 +52,13 @@ export function StorageTable() {
     const product = state.products.find(p => p.id === productId);
     if (!product) return { warehouse: 0, cashier: 0, total: 0 };
     
-    const warehouseStock = product.storage_stock || 0;
+    const warehouseStock = product.storage_stock;
     const cashierStock = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + (stock || 0), 0);
     
     return {
       warehouse: warehouseStock,
       cashier: cashierStock,
-      total: warehouseStock + cashierStock
+      total: product.total_stock || (warehouseStock + cashierStock)
     };
   };
 

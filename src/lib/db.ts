@@ -25,46 +25,50 @@ export async function fetchCashiers(): Promise<Cashier[]> {
 
 // Product Operations
 export async function fetchProducts(): Promise<Product[]> {
-  // Fetch products with their storage and cashier stocks
-  const { data, error } = await supabase
-    .from('products')
-    .select(`
-      *,
-      product_storage (
-        quantity,
-        updated_at
-      ),
-      cashier_stock (
-        cashier_id,
-        quantity,
-        updated_at
-      )
-    `)
-    .order('updated_at', { ascending: false });
-  
-  if (error) throw error;
-
-  // Transform the data to include storage_stock and cashier_stock
-  return (data || []).map(product => {
-    const storage_stock = Number(product.storage_stock || product.product_storage?.[0]?.quantity || 0);
-    const cashier_stocks = product.cashier_stock || [];
-    const cashier_stock = cashier_stocks.reduce((acc: Record<string, number>, stock: { cashier_id: string, quantity: number }) => {
-      acc[stock.cashier_id] = Number(stock.quantity || 0);
-      return acc;
-    }, {} as Record<string, number>);
+  try {
+    // First fetch basic product data
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        *,
+        product_storage!inner (
+          quantity
+        ),
+        cashier_stock (
+          cashier_id,
+          quantity
+        )
+      `)
+      .order('name');
     
-    // Calculate total stock
-    const total_cashier_stock = Object.values(cashier_stock).reduce((sum: number, qty: number) => sum + qty, 0);
-    
-    const total_stock = storage_stock + Object.values(cashier_stock).reduce((sum: number, qty: number) => sum + qty, 0);
+    if (error) throw error;
 
-    return {
-      ...product,
-      storage_stock,
-      cashier_stock,
-      total_stock
-    };
-  });
+    // Transform the data to match the Product interface
+    return (data || []).map(product => {
+      // Get storage stock from product_storage
+      const storage_stock = Number(product.product_storage?.quantity || 0);
+      
+      // Transform cashier_stock array to object
+      const cashier_stock = (product.cashier_stock || []).reduce((acc: Record<string, number>, stock: any) => {
+        acc[stock.cashier_id] = Number(stock.quantity || 0);
+        return acc;
+      }, {});
+      
+      // Calculate total stock
+      const total_cashier_stock = Object.values(cashier_stock).reduce((sum: number, qty: number) => sum + qty, 0);
+      const total_stock = storage_stock + total_cashier_stock;
+
+      return {
+        ...product,
+        storage_stock,
+        cashier_stock,
+        total_stock
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    throw error;
+  }
 }
 
 export async function addProduct(product: Omit<Product, 'id'>): Promise<Product> {
