@@ -4,9 +4,9 @@ import * as db from '@/lib/db';
 import {
   calculateSubtotal,
   calculateTaxAmount,
-  calculateTotal,
-  formatToRupiah
+  calculateTotal
 } from '@/lib/calculations';
+import { returnCashierStock } from '@/lib/returnStock';
 import * as stockManagement from '@/lib/stockManagement';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -40,6 +40,16 @@ export interface Product {
   cashier_stock: Record<string, number>;
   total_stock?: number;
   stock?: number; // For compatibility with cart operations
+}
+
+export interface StockReturn {
+  id: string;
+  product_id: string;
+  cashier_id: string;
+  quantity: number;
+  reason: string;
+  returned_at: string;
+  created_by: string;
 }
 
 export interface CartItem {
@@ -116,24 +126,37 @@ interface POSContextType {
   state: POSState;
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
-  refreshProducts: () => Promise<Product[]>;
   deleteProduct: (id: string) => Promise<void>;
+  fetchProducts: () => Promise<void>;
   addToCart: (product: Product, quantity?: number) => void;
   updateCartItem: (product: Product, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
   completeSale: (sale: Sale) => Promise<void>;
-  updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
-  deleteSale: (id: string) => Promise<void>;
   calculateTotals: () => { subtotal: number; taxes: SaleTax[]; total: number };
-  updateProductStorage: (productId: string, quantity: number, reason: string) => Promise<{
+  distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
+  updateProductStorage: (
+    productId: string,
+    quantity: number,
+    reason: string
+  ) => Promise<{
     success: boolean;
     previous_stock: number;
     new_stock: number;
     change: number;
     product: Product;
   }>;
-  distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
+  returnCashierStock: (
+    productId: string,
+    quantity: number,
+    reason: string
+  ) => Promise<{
+    success: boolean;
+    previous_stock?: number;
+    new_stock?: number;
+    returned_quantity?: number;
+    error?: string;
+  }>;
 }
 
 type POSAction =
@@ -348,19 +371,28 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
 
 interface POSContextType {
   state: POSState;
-  addProduct: (product: Partial<Product>) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
-  addToCart: (product: Product, quantity: number) => void;
+  fetchProducts: () => Promise<void>;
+  addToCart: (product: Product, quantity?: number) => void;
   updateCartItem: (product: Product, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
   completeSale: (sale: Sale) => Promise<void>;
-  updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
-  deleteSale: (id: string) => Promise<void>;
-  calculateTotals: () => { subtotal: number, taxes: SaleTax[], total: number };
-  updateProductStorage: (productId: string, quantity: number) => Promise<void>;
+  calculateTotals: () => { subtotal: number; taxes: SaleTax[]; total: number };
   distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
+  returnStock: (
+    productId: string,
+    quantity: number,
+    reason: string
+  ) => Promise<{
+    success: boolean;
+    previous_stock?: number;
+    new_stock?: number;
+    returned_quantity?: number;
+    error?: string;
+  }>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -485,20 +517,51 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
 
   const completeSale = async (sale: Sale) => {
     try {
-      const newSale = await db.createSale(
-        state.cart,
-        sale.subtotal,
-        sale.sales_taxes,
-        sale.total,
-        sale.payment_method
-      );
-      
-      dispatch({ type: 'ADD_SALE', sale: newSale });
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error('No authenticated user');
+
+      const saleItems = state.cart.map(item => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        price_at_time: item.product.price
+      }));
+
+      // Create the sale record
+      const { data, error } = await supabase
+        .from('sales')
+        .insert({
+          ...sale,
+          cashier_id: user.user.id,
+          sale_items: saleItems,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update stock levels
+      for (const item of state.cart) {
+        await stockManagement.updateStorageStock(
+          item.product.id,
+          -item.quantity,
+          `Sale #${data.id}`
+        );
+      }
+
+      // Refresh products and clear cart
+      const products = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products });
       clearCart();
+
+      toast({
+        title: "Success",
+        description: `Sale #${data.id} completed successfully`
+      });
     } catch (error) {
       toast({
         title: "Gagal Menyimpan Transaksi",
-        description: "Terjadi kesalahan saat menyimpan transaksi",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan transaksi",
         variant: "destructive"
       });
       throw error;

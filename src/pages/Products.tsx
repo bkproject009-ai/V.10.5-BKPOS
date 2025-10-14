@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { usePOS } from '@/contexts/POSContext';
-import { Package, Search } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Package, Search, ArrowLeft } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ReturnDialog } from '@/components/ReturnDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -25,9 +27,14 @@ const formatPrice = (price: number) => {
 };
 
 const Products = () => {
-  const { state } = usePOS();
+  const { state, fetchProducts } = usePOS();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  
+  const isAdmin = user?.user_metadata?.role === 'admin';
 
   const categories = ['all', ...Array.from(new Set(state.products.map(p => p.category)))];
 
@@ -37,6 +44,22 @@ const Products = () => {
     const warehouseStock = product.storage_stock || 0;
     const cashierStock = Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0);
     return warehouseStock + cashierStock;
+  };
+
+  const getCurrentCashierStock = (product: any) => {
+    if (!user) return 0;
+    return product.cashier_stock[user.id] || 0;
+  };
+
+  const handleReturnClick = (product: any) => {
+    setSelectedProduct(product);
+    setReturnDialogOpen(true);
+  };
+
+  const handleReturnSuccess = () => {
+    setReturnDialogOpen(false);
+    setSelectedProduct(null);
+    fetchProducts();
   };
 
   const filteredProducts = state.products.filter(product => {
@@ -63,11 +86,30 @@ const Products = () => {
         <Tabs defaultValue="products" className="space-y-4">
           <TabsList>
             <TabsTrigger value="products">Produk</TabsTrigger>
-            <TabsTrigger value="storage">Gudang</TabsTrigger>
-            <TabsTrigger value="distribution">Distribusi</TabsTrigger>
+            {isAdmin && (
+              <>
+                <TabsTrigger value="storage">Gudang</TabsTrigger>
+                <TabsTrigger value="distribution">Distribusi</TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           <TabsContent value="products" className="space-y-4">
+            {/* Return Dialog */}
+            {selectedProduct && (
+              <ReturnDialog
+                isOpen={returnDialogOpen}
+                onClose={() => {
+                  setReturnDialogOpen(false);
+                  setSelectedProduct(null);
+                }}
+                product={selectedProduct}
+                cashierId={user?.id || ''}
+                onSuccess={handleReturnSuccess}
+                currentStock={getCurrentCashierStock(selectedProduct)}
+              />
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1">
                 <div className="relative">
@@ -106,17 +148,26 @@ const Products = () => {
                       <TableHead>SKU</TableHead>
                       <TableHead>Kategori</TableHead>
                       <TableHead className="text-right">Harga</TableHead>
-                      <TableHead className="text-center">Stok Gudang</TableHead>
-                      <TableHead className="text-center">Stok Kasir</TableHead>
-                      <TableHead className="text-center">Total Stok</TableHead>
+                      {isAdmin ? (
+                        <>
+                          <TableHead className="text-center">Stok Gudang</TableHead>
+                          <TableHead className="text-center">Stok Kasir</TableHead>
+                          <TableHead className="text-center">Total Stok</TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead className="text-center">Stok Saya</TableHead>
+                          <TableHead className="text-center">Aksi</TableHead>
+                        </>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredProducts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-10">
+                        <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-10">
                           <div className="flex flex-col items-center justify-center space-y-2">
-                            <Package className="h-8 w-8 text-muted-foreground" />
+                            <Package size={32} className="text-muted-foreground" />
                             <p className="text-sm text-muted-foreground">
                               {searchTerm || selectedCategory !== 'all'
                                 ? 'Tidak ada produk yang sesuai dengan pencarian'
@@ -134,11 +185,32 @@ const Products = () => {
                             <Badge variant="outline">{product.category}</Badge>
                           </TableCell>
                           <TableCell className="text-right">{formatPrice(product.price)}</TableCell>
-                          <TableCell className="text-center">{product.storage_stock || 0}</TableCell>
-                          <TableCell className="text-center">
-                            {Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0)}
-                          </TableCell>
-                          <TableCell className="text-center">{getTotalStock(product.id)}</TableCell>
+                          {isAdmin ? (
+                            <>
+                              <TableCell className="text-center">{product.storage_stock || 0}</TableCell>
+                              <TableCell className="text-center">
+                                {Object.values(product.cashier_stock || {}).reduce((sum, stock) => sum + stock, 0)}
+                              </TableCell>
+                              <TableCell className="text-center">{getTotalStock(product.id)}</TableCell>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell className="text-center">
+                                {getCurrentCashierStock(product)}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {getCurrentCashierStock(product) > 0 && (
+                                  <button
+                                    onClick={() => handleReturnClick(product)}
+                                    className="inline-flex items-center px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 text-sm"
+                                  >
+                                    <ArrowLeft className="w-4 h-4 mr-1" />
+                                    Return
+                                  </button>
+                                )}
+                              </TableCell>
+                            </>
+                          )}
                         </TableRow>
                       ))
                     )}
@@ -148,13 +220,17 @@ const Products = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="storage">
-            <StorageTable />
-          </TabsContent>
+          {isAdmin && (
+            <>
+              <TabsContent value="storage">
+                <StorageTable />
+              </TabsContent>
 
-          <TabsContent value="distribution">
-            <DistributionTable />
-          </TabsContent>
+              <TabsContent value="distribution">
+                <DistributionTable />
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
     </div>

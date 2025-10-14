@@ -70,16 +70,15 @@ export const DesktopCart = ({
                         size="sm"
                         onClick={() => onQuantityChange(item.product.id, item.quantity - 1)}
                       >
-                        <Minus className="h-3 w-3" />
+                        <Minus size={12} />
                       </Button>
                       <span className="w-8 text-center font-medium">{item.quantity}</span>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => onQuantityChange(item.product.id, item.quantity + 1)}
-                        disabled={item.quantity >= item.product.stock}
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus size={12} />
                       </Button>
                     </div>
                     <Button

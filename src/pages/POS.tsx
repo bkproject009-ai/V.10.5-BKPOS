@@ -66,10 +66,37 @@ const POS = () => {
   };
 
   const handleQuantityChange = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(productId);
-    } else {
-      updateCartItem(productId, newQuantity);
+    try {
+      if (newQuantity <= 0) {
+        removeFromCart(productId);
+      } else {
+        const product = state.products.find(p => p.id === productId);
+        if (!product) {
+          throw new Error('Product not found');
+        }
+        
+        // Get current cashier stock
+        const cashierStock = product.cashier_stock ? 
+          Object.values(product.cashier_stock)[0] || 0 : 0;
+
+        if (newQuantity > cashierStock) {
+          toast({
+            title: "Stok Tidak Mencukupi",
+            description: `Stok tersedia: ${cashierStock} item`,
+            variant: "destructive"
+          });
+          return;
+        }
+
+        updateCartItem(productId, newQuantity);
+      }
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      toast({
+        title: "Gagal Mengubah Jumlah",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan saat mengubah jumlah item",
+        variant: "destructive"
+      });
     }
   };
 
@@ -81,25 +108,40 @@ const POS = () => {
   } | null>(null);
 
   const handleCheckout = async (paymentMethod: 'cash' | 'qris') => {
-    if (state.cart.length === 0) return;
+    if (state.cart.length === 0) {
+      toast({
+        title: "Keranjang Kosong",
+        description: "Tambahkan produk ke keranjang terlebih dahulu",
+        variant: "destructive"
+      });
+      return;
+    }
     
     try {
-      // Calculate final totals before completing sale
-      const finalTotals = calculateTotals();
       const sale = await completeSale(paymentMethod);
-      setLastPaymentMethod(paymentMethod);
-      setIsCheckoutOpen(false);
-      setShowReceipt(true);
       
-      // Store the calculated values for receipt
-      setLastSaleTotal({
-        subtotal: finalTotals.subtotal,
-        tax: finalTotals.taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
-        total: finalTotals.total
-      });
+      if (sale) {
+        setLastPaymentMethod(paymentMethod);
+        setIsCheckoutOpen(false);
+        setShowReceipt(true);
+        setLastSaleTotal({
+          subtotal: sale.subtotal,
+          tax: sale.tax_amount,
+          total: sale.total
+        });
+        
+        toast({
+          title: "Transaksi Berhasil",
+          description: "Pembayaran telah berhasil diproses"
+        });
+      }
     } catch (error) {
       console.error('Failed to complete sale:', error);
-      // Todo: Show error toast
+      toast({
+        title: "Gagal Memproses Pembayaran",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan saat memproses pembayaran",
+        variant: "destructive"
+      });
     }
   };
 
@@ -194,7 +236,12 @@ const POS = () => {
             subtotal={subtotal}
             taxes={taxes}
             total={total}
-            onQuantityChange={handleQuantityChange}
+            onQuantityChange={(productId, quantity) => {
+              const product = state.products.find(p => p.id === productId);
+              if (product) {
+                handleQuantityChange(productId, quantity);
+              }
+            }}
             onRemoveItem={removeFromCart}
             onClear={clearCart}
             onCheckout={() => setIsCheckoutOpen(true)}
@@ -205,7 +252,12 @@ const POS = () => {
             subtotal={subtotal}
             taxes={taxes}
             total={total}
-            onQuantityChange={handleQuantityChange}
+            onQuantityChange={(productId, quantity) => {
+              const product = state.products.find(p => p.id === productId);
+              if (product) {
+                handleQuantityChange(productId, quantity);
+              }
+            }}
             onRemoveItem={removeFromCart}
             onClear={clearCart}
             onCheckout={() => setIsCheckoutOpen(true)}
