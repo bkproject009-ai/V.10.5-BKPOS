@@ -66,7 +66,12 @@ export function DistributionTable() {
     }
 
     try {
-      await distributeStock(selectedProduct.id, selectedCashier, quantity);
+      const result = await distributeStock(selectedProduct.id, selectedCashier, quantity);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Gagal mendistribusikan stok');
+      }
+
       setIsOpen(false);
       setQuantity(0);
       setSelectedProduct(null);
@@ -79,7 +84,7 @@ export function DistributionTable() {
       console.error('Error distributing stock:', error);
       toast({
         title: "Gagal mendistribusikan stok",
-        description: "Terjadi kesalahan saat mendistribusikan stok. Silakan coba lagi.",
+        description: error instanceof Error ? error.message : "Terjadi kesalahan saat mendistribusikan stok. Silakan coba lagi.",
         variant: "destructive",
       });
     }

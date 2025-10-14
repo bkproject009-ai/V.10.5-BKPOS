@@ -1,40 +1,4 @@
--- Create stock_returns table if not exists
-create table if not exists stock_returns (
-  id uuid default gen_random_uuid() primary key,
-  product_id uuid references products(id),
-  cashier_id uuid references users(id),
-  user_id uuid references users(id),
-  quantity integer not null,
-  reason text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create cashier_stock table if not exists
-create table if not exists cashier_stock (
-  id uuid default gen_random_uuid() primary key,
-  product_id uuid references products(id),
-  cashier_id uuid references users(id),
-  stock integer not null default 0,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  constraint cashier_stock_product_cashier_unique unique (product_id, cashier_id)
-);
-
--- Ensure cashier_stock has the unique constraint
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'cashier_stock_product_cashier_unique'
-  ) then
-    alter table cashier_stock
-    add constraint cashier_stock_product_cashier_unique 
-    unique (product_id, cashier_id);
-  end if;
-end $$;
-
--- Function to return stock from cashier to warehouse
+-- Update return stock function to handle both quantity and stock
 create or replace function return_cashier_stock(
   _product_id uuid,
   _cashier_id uuid,
@@ -75,11 +39,26 @@ begin
   _new_stock := _previous_stock + _quantity;
 
   -- Update or insert cashier stock
-  insert into cashier_stock (product_id, cashier_id, stock, created_at, updated_at)
-  values (_product_id, _cashier_id, _cashier_new_stock, now(), now())
+  insert into cashier_stock (
+    product_id, 
+    cashier_id, 
+    quantity,
+    stock,
+    created_at,
+    updated_at
+  ) values (
+    _product_id,
+    _cashier_id,
+    _cashier_new_stock,
+    _cashier_new_stock,
+    now(),
+    now()
+  )
   on conflict (product_id, cashier_id) do update
-  set stock = _cashier_new_stock,
-      updated_at = now();
+  set 
+    quantity = _cashier_new_stock,
+    stock = _cashier_new_stock,
+    updated_at = now();
 
   -- Update warehouse stock
   update products

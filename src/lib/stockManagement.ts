@@ -140,39 +140,33 @@ export const distributeStock = async (
   notes?: string
 ) => {
   try {
-    // Check current warehouse stock first
-    const { data: currentStock, error: stockError } = await supabase
-      .from('product_storage')
-      .select('quantity')
-      .eq('product_id', productId)
-      .single();
-
-    if (stockError) throw stockError;
-    
-    if (!currentStock || currentStock.quantity < quantity) {
-      throw new Error('Stok di gudang tidak mencukupi untuk distribusi');
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      throw new Error('User not authenticated');
     }
 
-    const { data, error } = await supabase.rpc('distribute_stock_to_cashier', {
+    const { data, error } = await supabase.rpc('distribute_to_cashier', {
       _product_id: productId,
       _cashier_id: cashierId,
       _quantity: quantity,
-      _distributed_by: distributedBy,
-      _notes: notes || ''
+      _user_id: user.user.id
     });
 
     console.log('Distribution response:', JSON.stringify({ data, error }, null, 2));
 
     if (error) throw error;
     
-    // Get the actual response object from the nested structure
-    const response = data?.response;
-    
-    if (!response || !response.success) {
-      throw new Error(response?.error || 'Gagal mendistribusikan stok: Respon tidak valid');
+    if (!data) {
+      throw new Error('No response from server');
+    }
+
+    // Check if the response has the expected structure
+    if (typeof data.success !== 'boolean') {
+      console.error('Invalid response format:', data);
+      throw new Error('Invalid response format from server');
     }
     
-    return response;
+    return data;
   } catch (error) {
     console.error('Error distributing stock:', error);
     throw error instanceof Error ? error : new Error('Gagal mendistribusikan stok');

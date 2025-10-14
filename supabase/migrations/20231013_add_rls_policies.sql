@@ -1,3 +1,10 @@
+-- Drop existing policies if they exist
+drop policy if exists "Allow read cashier_stock for authenticated users" on cashier_stock;
+drop policy if exists "Allow update cashier_stock for authenticated users" on cashier_stock;
+drop policy if exists "Allow insert cashier_stock for authenticated users" on cashier_stock;
+drop policy if exists "Allow read stock_returns for authenticated users" on stock_returns;
+drop policy if exists "Allow insert stock_returns for authenticated users" on stock_returns;
+
 -- Enable RLS
 alter table cashier_stock enable row level security;
 alter table stock_returns enable row level security;
