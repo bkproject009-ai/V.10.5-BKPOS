@@ -21,6 +21,20 @@ export interface StockReturn {
   created_by: string;
 }
 
+export interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
+export type Cart = CartItem[];
+
+export interface PaymentDetails {
+  amount: number;
+  change?: number;
+  method: 'cash' | 'qris';
+  reference?: string;
+}
+
 export interface Sale {
   id: string;
   created_at: string;
@@ -30,6 +44,8 @@ export interface Sale {
   payment_method: 'cash' | 'qris';
   cashier_id: string;
   status: 'completed' | 'cancelled' | 'pending';
+  payment_details?: PaymentDetails;
+  completed_at?: string;
 }
 
 export interface SaleItem {
@@ -46,4 +62,27 @@ export interface TaxType {
   name: string;
   rate: number;
   enabled?: boolean;
+}
+
+export interface SaleTax {
+  id: string;
+  rate: number;
+  amount: number;
+}
+
+export interface StockMovement {
+  id: string;
+  product_id: string;
+  quantity: number;
+  type: 'in' | 'out' | 'adjustment';
+  reference?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface CashierStock {
+  cashier_id: string;
+  product_id: string;
+  stock: number;
+  updated_at: string;
 }

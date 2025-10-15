@@ -8,6 +8,7 @@ import { createQRISPayment, processPayment, checkQRISStatus } from '@/lib/paymen
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -67,7 +68,7 @@ export function PaymentDialog({
   const form = useForm({
     resolver: zodResolver(cashPaymentSchema),
     defaultValues: {
-      amount: '',
+      amount: '0',
     },
   })
 
@@ -84,16 +85,19 @@ export function PaymentDialog({
         return
       }
 
-      // Proses pembayaran cash
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate processing
-      
       const change = values.amount - total
+      
+      // Call the payment completion callback
+      onPaymentComplete('cash', {
+        amount_received: values.amount,
+        change: change
+      })
+
       toast({
         title: 'Pembayaran Berhasil',
         description: `Kembalian: ${formatPrice(change)}`,
       })
-
-      onPaymentComplete()
+      
       onOpenChange(false)
     } catch (error: any) {
       toast({
@@ -166,6 +170,9 @@ export function PaymentDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Pembayaran</DialogTitle>
+          <DialogDescription>
+            Pilih metode pembayaran dan masukkan jumlah yang diterima
+          </DialogDescription>
         </DialogHeader>
 
         <div className="mb-4">
@@ -200,7 +207,8 @@ export function PaymentDialog({
                               type="number"
                               min={total}
                               step="1000"
-                              {...field}
+                              value={field.value || ''}
+                              onChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />

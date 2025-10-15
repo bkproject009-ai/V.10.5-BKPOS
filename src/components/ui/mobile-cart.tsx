@@ -86,6 +86,14 @@ export function MobileCart({
                       <div className="flex items-center space-x-2">
                         <Button
                           size="sm"
+                          variant="destructive"
+                          onClick={() => onRemoveItem(item.product.id)}
+                          className="w-8 h-8 flex items-center justify-center p-0"
+                        >
+                          ×
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             if (item.quantity > 1) {

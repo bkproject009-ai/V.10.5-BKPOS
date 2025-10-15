@@ -10,6 +10,7 @@ import { returnCashierStock } from '@/lib/returnStock';
 import * as stockManagement from '@/lib/stockManagement';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
+import { completeSale, verifyStockAvailability } from '@/lib/completeSale';
 
 export interface CashierStock {
   cashier_id: string;
@@ -501,11 +502,14 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeFromCart = (productId: string) => {
+    console.log('Removing product from cart:', productId);
     dispatch({ type: 'REMOVE_FROM_CART', productId });
   };
 
   const clearCart = () => {
+    console.log('Clearing cart...');
     dispatch({ type: 'CLEAR_CART' });
+    console.log('Cart cleared.');
   };
 
   const calculateTotals = () => {
@@ -530,49 +534,56 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
 
       const { subtotal, taxes, total } = calculateTotals();
       
-      const saleItems = state.cart.map(item => ({
-        product_id: item.product.id,
-        quantity: item.quantity,
-        price_at_time: item.product.price
-      }));
+      // Check stock availability first
+      const stockCheck = await verifyStockAvailability(state.cart, user.user.id);
+      if (!stockCheck.available) {
+        const items = stockCheck.insufficientItems?.map(
+          item => `${state.products.find(p => p.id === item.productId)?.name} (tersedia: ${item.available}, diminta: ${item.requested})`
+        ).join('\n');
+        
+        toast({
+          title: "Stok Tidak Mencukupi",
+          description: `Beberapa item memiliki stok yang tidak mencukupi:\n${items}`,
+          variant: "destructive"
+        });
+        return;
+      }
 
-      // Create the sale record
-      const { data, error } = await supabase
-        .from('sales')
-        .insert({
-          cashier_id: user.user.id,
-          subtotal: subtotal,
-          tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
-          total: total,
-          payment_method: paymentMethod,
-          status: 'completed',
-          sale_items: saleItems,
-          created_at: new Date().toISOString()
-        })
-        .select('*')
-        .single();
+      // Create payment details
+      const paymentDetails = {
+        method: paymentMethod,
+        amount: total,
+        timestamp: new Date().toISOString()
+      };
 
-      if (error) throw error;
+      // Call completeSale function with transaction handling
+      const result = await completeSale({
+        paymentMethod,
+        status: 'completed',
+        total,
+        subtotal,
+        taxAmount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
+        cashierId: user.user.id,
+        paymentDetails,
+        cart: state.cart,
+        salesTaxes: taxes
+      });
 
-      // Update stock levels
-      for (const item of state.cart) {
-        await stockManagement.updateStorageStock(
-          item.product.id,
-          -item.quantity,
-          `Sale #${data.id}`
-        );
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to complete sale');
       }
 
       // Refresh products and clear cart
       const products = await db.fetchProducts();
       dispatch({ type: 'SET_PRODUCTS', products });
-      clearCart();
+      dispatch({ type: 'CLEAR_CART' });
 
       toast({
-        title: "Success",
-        description: `Sale #${data.id} completed successfully`
+        title: "Transaksi Berhasil",
+        description: `Transaksi #${result.saleId} berhasil disimpan`
       });
     } catch (error) {
+      console.error('Error completing sale:', error);
       toast({
         title: "Gagal Menyimpan Transaksi",
         description: error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan transaksi",
