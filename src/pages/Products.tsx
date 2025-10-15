@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePOS } from '@/contexts/POSContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Package, Search, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Package, Plus, Search, Tag } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -10,14 +10,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ReturnDialog } from '@/components/ReturnDialog';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { StorageTable } from '@/components/StorageTable';
 import { DistributionTable } from '@/components/DistributionTable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ProductForm } from '@/components/admin/ProductForm';
+import { CategoryForm } from '@/components/admin/CategoryForm';
+import { ReturnDialog } from '@/components/ReturnDialog';
+import { supabase } from '@/lib/supabase';
+import { toast } from '@/hooks/use-toast';
 
 const formatPrice = (price: number) => {
   return new Intl.NumberFormat('id-ID', {
@@ -26,17 +31,85 @@ const formatPrice = (price: number) => {
   }).format(price);
 };
 
+interface Category {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  storage_stock: number;
+  category_code: string;
+  description?: string;
+  image?: string;
+  cashier_stock: Record<string, number>;
+}
+
 const Products = () => {
   const { state, fetchProducts } = usePOS();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [editCategory, setEditCategory] = useState<Category>();
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   
   const isAdmin = user?.user_metadata?.role === 'admin';
 
-  const categories = ['all', ...Array.from(new Set(state.products.map(p => p.category)))];
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  async function fetchCategories() {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('name');
+    
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Gagal mengambil data kategori',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setCategories(data);
+  }
+
+  async function deleteCategory(code: string) {
+    if (!confirm('Yakin ingin menghapus kategori ini?')) return;
+
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('code', code);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Gagal menghapus kategori',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    toast({
+      title: 'Sukses',
+      description: 'Kategori berhasil dihapus'
+    });
+
+    fetchCategories();
+  }
 
   const getTotalStock = (productId: string) => {
     const product = state.products.find(p => p.id === productId);
@@ -68,7 +141,7 @@ const Products = () => {
       product.sku.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategory = 
-      selectedCategory === 'all' || product.category === selectedCategory;
+      selectedCategory === 'all' || product.category_code === selectedCategory;
 
     return matchesSearch && matchesCategory;
   });
@@ -85,11 +158,18 @@ const Products = () => {
 
         <Tabs defaultValue="products" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="products">Produk</TabsTrigger>
+            <TabsTrigger value="products">
+              <Package size={16} />
+              Produk
+            </TabsTrigger>
             {isAdmin && (
               <>
                 <TabsTrigger value="storage">Gudang</TabsTrigger>
                 <TabsTrigger value="distribution">Distribusi</TabsTrigger>
+                <TabsTrigger value="categories">
+                  <Tag size={16} />
+                  Kategori
+                </TabsTrigger>
               </>
             )}
           </TabsList>
@@ -113,7 +193,7 @@ const Products = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Search size={16} className="absolute left-2 top-2.5 text-muted-foreground" />
                   <Input
                     placeholder="Cari produk..."
                     className="pl-8"
@@ -129,9 +209,10 @@ const Products = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
+                    <SelectItem value="all">Semua Kategori</SelectItem>
                     {categories.map(category => (
-                      <SelectItem key={category} value={category}>
-                        {category === 'all' ? 'Semua Kategori' : category}
+                      <SelectItem key={category.id} value={category.code}>
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -167,7 +248,7 @@ const Products = () => {
                       <TableRow>
                         <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-10">
                           <div className="flex flex-col items-center justify-center space-y-2">
-                            <Package size={32} className="text-muted-foreground" />
+                            <Package size={32} color="var(--muted-foreground)" />
                             <p className="text-sm text-muted-foreground">
                               {searchTerm || selectedCategory !== 'all'
                                 ? 'Tidak ada produk yang sesuai dengan pencarian'
@@ -182,7 +263,9 @@ const Products = () => {
                           <TableCell className="font-medium">{product.name}</TableCell>
                           <TableCell>{product.sku}</TableCell>
                           <TableCell>
-                            <Badge variant="outline">{product.category}</Badge>
+                            <Badge variant="outline">
+                              {categories.find(c => c.code === product.category_code)?.name || product.category_code}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">{formatPrice(product.price)}</TableCell>
                           {isAdmin ? (

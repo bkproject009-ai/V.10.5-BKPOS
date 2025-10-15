@@ -1,149 +1,181 @@
-import { useState, useRef, useEffect } from 'react';
-import { usePOS } from '@/contexts/POSContext';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { Receipt } from '@/components/ui/receipt';
-import { MobileCart } from '@/components/ui/mobile-cart';
-import { DesktopCart } from '@/components/ui/desktop-cart';
-import { useToast } from '@/hooks/use-toast';
-import { 
+import { useState, useRef, useEffect } from 'react'
+import { usePOS } from '@/contexts/POSContext'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
+import { Receipt } from '@/components/ui/receipt'
+import { MobileCart } from '@/components/ui/mobile-cart'
+import { DesktopCart } from '@/components/ui/desktop-cart'
+import { PaymentDialog } from '@/components/pos/PaymentDialog'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { 
+} from '@/components/ui/dialog'
+import {
   Search,
   CreditCard,
   Banknote,
   ShoppingCart,
   LayoutGrid,
   List,
-} from 'lucide-react';
+  Package,
+} from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 const POS = () => {
-  const { state, addToCart, updateCartItem, removeFromCart, clearCart, completeSale, calculateTotals } = usePOS();
-  const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
-  const receiptRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const isMobile = useIsMobile();
-  const navigate = useNavigate();
+  const { state, addToCart, updateCartItem, removeFromCart, clearCart, completeSale, calculateTotals } = usePOS()
+  const { toast } = useToast()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null)
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<'cash' | 'qris' | null>(null)
+  const [lastSaleTotal, setLastSaleTotal] = useState<{
+    subtotal: number
+    tax: number
+    total: number
+  } | null>(null)
+  
+  const receiptRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const isMobile = useIsMobile()
+  const navigate = useNavigate()
 
   // Filter products
   const filteredProducts = state.products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+                         product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || product.category_code === selectedCategory
     const hasCashierStock = product.cashier_stock && 
-      Object.values(product.cashier_stock).some(stock => stock > 0);
-    return matchesSearch && matchesCategory && hasCashierStock;
-  });
+      Object.values(product.cashier_stock).some(stock => stock > 0)
+    return matchesSearch && matchesCategory && hasCashierStock
+  })
 
-  // Get unique categories
-  const categories = ['all', ...new Set(state.products.map(p => p.category))];
+  // Get unique categories from products
+  const categories = Array.from(new Set(['all', ...state.products.map(p => p.category_code)]))
 
   // Calculate totals using the context method
-  const { subtotal, taxes, total } = calculateTotals();
+  const { subtotal, taxes, total } = calculateTotals()
 
   const handleAddToCart = (productId: string) => {
-    const product = state.products.find(p => p.id === productId);
+    const product = state.products.find(p => p.id === productId)
     if (product) {
-      addToCart(product, 1);
-    }
-  };
+      const currentQty = state.cart.find(item => item.product.id === productId)?.quantity || 0
+      const cashierStock = product.cashier_stock ? 
+        Object.values(product.cashier_stock)[0] || 0 : 0
 
-  const handleQuantityChange = (productId: string, newQuantity: number) => {
+      if (currentQty >= cashierStock) {
+        toast({
+          title: "Stok Tidak Mencukupi",
+          description: `Stok tersedia: ${cashierStock} item`,
+          variant: "destructive"
+        })
+        return
+      }
+
+      addToCart(product, 1)
+    }
+  }
+
+  const handleQuantityChange = async (productId: string, newQuantity: number) => {
     try {
       if (newQuantity <= 0) {
-        removeFromCart(productId);
-      } else {
-        const product = state.products.find(p => p.id === productId);
-        if (!product) {
-          throw new Error('Product not found');
-        }
-        
-        // Get current cashier stock
-        const cashierStock = product.cashier_stock ? 
-          Object.values(product.cashier_stock)[0] || 0 : 0;
+        removeFromCart(productId)
+        return
+      }
 
-        if (newQuantity > cashierStock) {
-          toast({
-            title: "Stok Tidak Mencukupi",
-            description: `Stok tersedia: ${cashierStock} item`,
-            variant: "destructive"
-          });
-          return;
-        }
+      const product = state.products.find(p => p.id === productId)
+      if (!product) {
+        throw new Error('Product not found')
+      }
+      
+      // Get current cashier stock from context/state
+      const cashierStock = product.cashier_stock ? 
+        Object.values(product.cashier_stock)[0] || 0 : 0
 
-        updateCartItem(productId, newQuantity);
+      if (newQuantity > cashierStock) {
+        toast({
+          title: "Stok Tidak Mencukupi",
+          description: `Stok tersedia: ${cashierStock} item`,
+          variant: "destructive"
+        })
+        return
+      }
+
+      const cartItem = state.cart.find(item => item.product.id === productId)
+      if (cartItem) {
+        updateCartItem(cartItem.product, newQuantity)
       }
     } catch (error) {
-      console.error('Error updating quantity:', error);
+      console.error('Error updating quantity:', error)
       toast({
         title: "Gagal Mengubah Jumlah",
         description: error instanceof Error ? error.message : "Terjadi kesalahan saat mengubah jumlah item",
         variant: "destructive"
-      });
+      })
     }
-  };
+  }
 
-  const [lastPaymentMethod, setLastPaymentMethod] = useState<'cash' | 'qris'>('cash');
-  const [lastSaleTotal, setLastSaleTotal] = useState<{
-    subtotal: number;
-    tax: number;
-    total: number;
-  } | null>(null);
-
-  const handleCheckout = async (paymentMethod: 'cash' | 'qris') => {
-    if (state.cart.length === 0) {
-      toast({
-        title: "Keranjang Kosong",
-        description: "Tambahkan produk ke keranjang terlebih dahulu",
-        variant: "destructive"
-      });
-      return;
-    }
-    
+  const handlePaymentSuccess = async (paymentMethod: 'cash' | 'qris', paymentDetails?: any) => {
     try {
-      const sale = await completeSale(paymentMethod);
+      const { subtotal, taxes, total } = calculateTotals()
+      const result = await completeSale({
+        payment_method: paymentMethod,
+        status: 'completed',
+        total: total,
+        subtotal: subtotal,
+        tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
+        cashier_id: state.user?.id || '',
+        created_at: new Date().toISOString(),
+        payment_details: paymentDetails || null,
+        id: '', // Will be generated by DB
+        sale_items: state.cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price_at_time: item.product.price
+        })),
+        sales_taxes: taxes.map(tax => ({
+          tax_id: tax.taxTypeId,
+          amount: tax.taxAmount
+        }))
+      })
       
-      if (sale) {
-        setLastPaymentMethod(paymentMethod);
-        setIsCheckoutOpen(false);
-        setShowReceipt(true);
+      if (result) {
+        setLastSaleId(result.id)
+        setLastPaymentMethod(paymentMethod)
+        setIsCheckoutOpen(false)
+        setShowReceipt(true)
         setLastSaleTotal({
-          subtotal: sale.subtotal,
-          tax: sale.tax_amount,
-          total: sale.total
-        });
+          subtotal,
+          tax: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
+          total
+        })
         
+        clearCart()
         toast({
           title: "Transaksi Berhasil",
           description: "Pembayaran telah berhasil diproses"
-        });
+        })
       }
     } catch (error) {
-      console.error('Failed to complete sale:', error);
+      console.error('Failed to complete sale:', error)
       toast({
         title: "Gagal Memproses Pembayaran",
         description: error instanceof Error ? error.message : "Terjadi kesalahan saat memproses pembayaran",
         variant: "destructive"
-      });
+      })
     }
-  };
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
@@ -182,49 +214,70 @@ const POS = () => {
         </div>
 
         {/* Products Grid */}
-        <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredProducts.map(product => (
-              <Card 
-                key={product.id} 
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => handleAddToCart(product.id)}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">{product.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{product.sku}</p>
-                    </div>
-                    <Badge variant="secondary">{product.category}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-between items-center">
-                      <span className="text-xl font-bold text-foreground">
-                        Rp{product.price.toLocaleString('id-ID')}
-                      </span>
-                    <Badge variant="outline">
-                      Stok: {Object.values(product.cashier_stock || {})[0] || 0}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+        <div className="relative flex-1 -mx-6">
+          <div className="absolute inset-0 overflow-y-auto px-6">
+            {filteredProducts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full space-y-4">
+                <ShoppingCart className="h-12 w-12 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  {searchTerm || selectedCategory !== 'all'
+                    ? 'Tidak ada produk yang sesuai dengan pencarian'
+                    : 'Belum ada produk yang tersedia'}
+                </p>
+              </div>
+            ) : (
+              <div className={
+                viewMode === 'grid' 
+                  ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  : "space-y-4"
+              }>
+                {filteredProducts.map(product => (
+                  <Card 
+                    key={product.id}
+                    className={viewMode === 'grid' ? '' : 'flex'}
+                  >
+                    <CardHeader className={viewMode === 'grid' ? '' : 'w-1/3'}>
+                      {product.image ? (
+                        <img 
+                          src={product.image} 
+                          alt={product.name}
+                          className="w-full aspect-square object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="w-full aspect-square bg-muted rounded-lg flex items-center justify-center">
+                          <Package className="h-12 w-12 text-muted-foreground" />
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardContent className={viewMode === 'grid' ? '' : 'w-2/3 flex flex-col justify-between'}>
+                      <div>
+                        <h3 className="font-semibold">{product.name}</h3>
+                        <p className="text-sm text-muted-foreground mb-2">{product.sku}</p>
+                        <Badge variant="outline">
+                          {categories.find(c => c === product.category_code)}
+                        </Badge>
+                      </div>
+                      <div className="mt-4 space-y-2">
+                        <p className="font-semibold text-lg">
+                          Rp{product.price.toLocaleString('id-ID')}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Stok: {product.cashier_stock ? Object.values(product.cashier_stock)[0] || 0 : 0}
+                        </p>
+                        <Button
+                          onClick={() => handleAddToCart(product.id)}
+                          className="w-full"
+                          disabled={!product.cashier_stock || Object.values(product.cashier_stock)[0] <= 0}
+                        >
+                          Tambah ke Keranjang
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-12">
-              <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground">Tidak ada produk tersedia</h3>
-              <p className="text-muted-foreground">
-                {searchTerm || selectedCategory !== 'all' 
-                  ? 'Coba ubah pencarian atau filter' 
-                  : 'Tidak ada produk di stok'
-                }
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -233,100 +286,43 @@ const POS = () => {
         {isMobile ? (
           <MobileCart
             cart={state.cart}
+            onQuantityChange={handleQuantityChange}
+            onRemove={removeFromCart}
             subtotal={subtotal}
             taxes={taxes}
             total={total}
-            onQuantityChange={(productId, quantity) => {
-              const product = state.products.find(p => p.id === productId);
-              if (product) {
-                handleQuantityChange(productId, quantity);
-              }
-            }}
-            onRemoveItem={removeFromCart}
-            onClear={clearCart}
             onCheckout={() => setIsCheckoutOpen(true)}
           />
         ) : (
           <DesktopCart
             cart={state.cart}
+            onQuantityChange={handleQuantityChange}
+            onRemove={removeFromCart}
             subtotal={subtotal}
             taxes={taxes}
             total={total}
-            onQuantityChange={(productId, quantity) => {
-              const product = state.products.find(p => p.id === productId);
-              if (product) {
-                handleQuantityChange(productId, quantity);
-              }
-            }}
-            onRemoveItem={removeFromCart}
-            onClear={clearCart}
             onCheckout={() => setIsCheckoutOpen(true)}
           />
         )}
       </div>
 
-      {/* Checkout Dialog */}
-      <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Selesaikan Pembayaran</DialogTitle>
-            <DialogDescription>Pilih metode pembayaran untuk menyelesaikan transaksi ini.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-4 bg-muted rounded-lg">
-              <div className="flex justify-between mb-2">
-                <span>Subtotal:</span>
-                <span>Rp{subtotal.toLocaleString('id-ID')}</span>
-              </div>
-              {taxes.map(tax => (
-                <div key={tax.taxTypeId} className="flex justify-between mb-2">
-                  <span>Pajak:</span>
-                  <span>Rp{tax.taxAmount.toLocaleString('id-ID')}</span>
-                </div>
-              ))}
-              <Separator className="my-2" />
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total:</span>
-                <span>Rp{total.toLocaleString('id-ID')}</span>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Pilih metode pembayaran untuk menyelesaikan transaksi.
-            </p>
-          </div>
-          <DialogFooter className="space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsCheckoutOpen(false)}
-            >
-              Batal
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleCheckout('cash')}
-              className="flex items-center space-x-2"
-            >
-              <Banknote className="h-4 w-4" />
-              <span>Tunai</span>
-            </Button>
-            <Button
-              onClick={() => handleCheckout('qris')}
-              className="flex items-center space-x-2 bg-gradient-to-r from-primary to-primary/80"
-            >
-              <CreditCard className="h-4 w-4" />
-              <span>QRIS</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={isCheckoutOpen}
+        onOpenChange={setIsCheckoutOpen}
+        total={total}
+        onPaymentComplete={(paymentMethod: 'cash' | 'qris', details?: any) => {
+          handlePaymentSuccess(paymentMethod, details)
+        }}
+      />
 
       {/* Receipt Dialog */}
       <Dialog 
         open={showReceipt} 
         onOpenChange={(open) => {
-          setShowReceipt(open);
+          setShowReceipt(open)
           if (!open) {
-            clearCart(); // Clear the cart when closing the receipt
+            clearCart() // Clear the cart when closing the receipt
           }
         }}
       >
@@ -343,27 +339,21 @@ const POS = () => {
               total={lastSaleTotal?.total || 0}
               paymentMethod={lastPaymentMethod}
               date={new Date()}
+              saleId={lastSaleId}
             />
           </div>
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => {
-                setShowReceipt(false);
-                clearCart(); // Clear the cart when closing manually
-              }}
+              onClick={() => setShowReceipt(false)}
             >
               Tutup
             </Button>
             <Button 
               onClick={() => {
                 if (receiptRef.current) {
-                  window.print();
-                  // Close receipt dialog after printing
-                  setTimeout(() => {
-                    setShowReceipt(false);
-                    clearCart(); // Clear the cart after printing
-                  }, 500);
+                  window.print()
+                  setTimeout(() => setShowReceipt(false), 500)
                 }
               }}
               className="bg-gradient-to-r from-primary to-primary/80"
@@ -374,7 +364,7 @@ const POS = () => {
         </DialogContent>
       </Dialog>
     </div>
-  );
-};
+  )
+}
 
-export default POS;
+export default POS

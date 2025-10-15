@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 
 interface MobileCartProps {
   cart: any[];
@@ -21,7 +21,7 @@ interface MobileCartProps {
   onCheckout: () => void;
 }
 
-export const MobileCart = ({
+export function MobileCart({
   cart,
   subtotal,
   taxes,
@@ -30,7 +30,7 @@ export const MobileCart = ({
   onRemoveItem,
   onClear,
   onCheckout,
-}: MobileCartProps) => {
+}: MobileCartProps) {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       <Sheet>
@@ -59,6 +59,7 @@ export const MobileCart = ({
               <span>Keranjang Belanja</span>
             </SheetTitle>
           </SheetHeader>
+          
           <div className="flex-1 flex flex-col mt-4">
             {cart.length === 0 ? (
               <div className="flex-1 flex items-center justify-center">
@@ -68,82 +69,95 @@ export const MobileCart = ({
                 </div>
               </div>
             ) : (
-              <>
+              <div className="flex-1 flex flex-col">
                 <div className="flex-1 overflow-auto space-y-3">
                   {cart.map(item => (
-                    <div key={item.product.id} className="flex items-center space-x-3 p-3 border border-border rounded-lg">
+                    <div 
+                      key={item.product.id} 
+                      className="flex items-center justify-between p-4 border-b"
+                    >
                       <div className="flex-1">
-                        <p className="font-medium text-foreground">{item.product.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Rp{item.product.price.toLocaleString('id-ID')} / pcs
+                        <h3 className="font-medium">{item.product.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          Rp {item.product.price.toLocaleString()}
                         </p>
                       </div>
+
                       <div className="flex items-center space-x-2">
                         <Button
-                          variant="outline"
                           size="sm"
-                          onClick={() => onQuantityChange(item.product.id, item.quantity - 1)}
+                          variant="outline"
+                          onClick={() => {
+                            if (item.quantity > 1) {
+                              onQuantityChange(item.product.id, item.quantity - 1);
+                            } else {
+                              onRemoveItem(item.product.id);
+                            }
+                          }}
+                          className="w-8 h-8 flex items-center justify-center p-0"
                         >
-                          <Minus size={12} />
+                          -
                         </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <span className="w-8 text-center">{item.quantity}</span>
                         <Button
-                          variant="outline"
                           size="sm"
-                          onClick={() => onQuantityChange(item.product.id, item.quantity + 1)}
+                          variant="outline"
+                          onClick={() => {
+                            const currentStock = item.product.cashier_stock ? 
+                              Object.values(item.product.cashier_stock)[0] || 0 : 0;
+                            if (item.quantity < currentStock) {
+                              onQuantityChange(item.product.id, item.quantity + 1);
+                            }
+                          }}
+                          className="w-8 h-8 flex items-center justify-center p-0"
+                          disabled={item.quantity >= (item.product.cashier_stock ? 
+                            Object.values(item.product.cashier_stock)[0] || 0 : 0)}
                         >
-                          <Plus size={12} />
+                          +
                         </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRemoveItem(item.product.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                   ))}
                 </div>
 
-                {/* Order Summary */}
                 <div className="mt-4 space-y-3 border-t pt-4">
                   <div className="flex justify-between text-sm">
                     <span>Subtotal</span>
-                    <span>Rp{subtotal.toLocaleString('id-ID')}</span>
+                    <span>Rp {subtotal.toLocaleString()}</span>
                   </div>
-                  {taxes.map(tax => (
-                    <div key={tax.taxTypeId} className="flex justify-between text-sm">
+                  {taxes.map((tax, index) => (
+                    <div key={index} className="flex justify-between text-sm">
                       <span>Pajak</span>
-                      <span>Rp{tax.taxAmount.toLocaleString('id-ID')}</span>
+                      <span>Rp {tax.taxAmount.toLocaleString()}</span>
                     </div>
                   ))}
                   <Separator />
-                  <div className="flex justify-between font-bold text-lg">
+                  <div className="flex justify-between font-bold">
                     <span>Total</span>
-                    <span>Rp{total.toLocaleString('id-ID')}</span>
+                    <span>Rp {total.toLocaleString()}</span>
                   </div>
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="outline" 
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
                       className="flex-1"
                       onClick={onClear}
                     >
-                      Kosongkan
+                      Hapus Semua
                     </Button>
-                    <Button 
-                      className="flex-1 bg-gradient-to-r from-primary to-primary/80"
+                    <Button
+                      className="flex-1"
                       onClick={onCheckout}
                     >
                       Bayar
                     </Button>
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </SheetContent>
       </Sheet>
     </div>
   );
-};
+}

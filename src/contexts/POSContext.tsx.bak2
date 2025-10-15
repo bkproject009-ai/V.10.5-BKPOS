@@ -28,29 +28,20 @@ export interface StockDistribution {
   distributed_at: string;
 }
 
-export interface Category {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-}
-
-export interface Product {
+  export interface Product {
   id: string;
   name: string;
   price: number;
   storage_stock: number;
-  category_id: string;
-  category_code: string;
+  category: string;
   sku: string;
   description?: string;
   image?: string;
   cashier_stock: Record<string, number>;
   total_stock?: number;
   stock?: number; // For compatibility with cart operations
-}
-
-export interface StockReturn {
+  initial_stock?: number; // For new product creation
+}export interface StockReturn {
   id: string;
   product_id: string;
   cashier_id: string;

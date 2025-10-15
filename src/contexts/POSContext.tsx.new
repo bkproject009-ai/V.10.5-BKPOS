@@ -28,20 +28,12 @@ export interface StockDistribution {
   distributed_at: string;
 }
 
-export interface Category {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-}
-
 export interface Product {
   id: string;
   name: string;
   price: number;
   storage_stock: number;
-  category_id: string;
-  category_code: string;
+  category: string;
   sku: string;
   description?: string;
   image?: string;
@@ -525,31 +517,66 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
 
   const completeSale = async (paymentMethod: 'cash' | 'qris') => {
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) throw new Error('No authenticated user');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user');
 
       const { subtotal, taxes, total } = calculateTotals();
-      
+      const taxAmount = taxes.reduce((sum, tax) => sum + tax.taxAmount, 0);
+
+      // Step 1: Create the sale record
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          cashier_id: user.id,
+          subtotal,
+          tax_amount: taxAmount,
+          total,
+          payment_method: paymentMethod,
+          status: 'completed',
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      // Step 2: Create sale items
       const saleItems = state.cart.map(item => ({
+        sale_id: sale.id,
         product_id: item.product.id,
         quantity: item.quantity,
         price_at_time: item.product.price
       }));
 
-      // Create the sale record
+      const { error: itemsError } = await supabase
+        .from('sale_items')
+        .insert(saleItems);
+
+      if (itemsError) throw itemsError;
+
+      // Step 3: Create sale taxes
+      const saleTaxes = taxes.map(tax => ({
+        sale_id: sale.id,
+        tax_type_id: tax.taxTypeId,
+        tax_amount: tax.taxAmount
+      }));
+
+      if (saleTaxes.length > 0) {
+        const { error: taxError } = await supabase
+          .from('sale_taxes')
+          .insert(saleTaxes);
+
+        if (taxError) throw taxError;
+      }
+
       const { data, error } = await supabase
         .from('sales')
-        .insert({
-          cashier_id: user.user.id,
-          subtotal: subtotal,
-          tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
-          total: total,
-          payment_method: paymentMethod,
-          status: 'completed',
-          sale_items: saleItems,
-          created_at: new Date().toISOString()
-        })
-        .select('*')
+        .select(`
+          *,
+          sale_items (*),
+          sale_taxes (*)
+        `)
+        .eq('id', sale.id)
         .single();
 
       if (error) throw error;

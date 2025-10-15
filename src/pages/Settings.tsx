@@ -21,7 +21,8 @@ const TaxSettings = () => {
   const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [taxName, setTaxName] = useState('');
-  const [taxRate, setTaxRate] = useState('');
+  const [taxRate, setTaxRate] = useState<string>('0');
+  const [selectedTaxId, setSelectedTaxId] = useState<string | null>(null);
 
   const loadTaxTypes = async () => {
     setIsLoading(true);

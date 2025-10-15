@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -9,13 +9,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { StockReturnButton } from './StockReturnButton';
+import { ReturnDialog } from './pos/ReturnDialog';
 import { usePOS } from '@/contexts/POSContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 export function CashierStockView() {
   const { state, fetchProducts } = usePOS();
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [isReturnOpen, setIsReturnOpen] = useState(false);
 
   if (!user) return null;
 
@@ -24,9 +28,12 @@ export function CashierStockView() {
     product => (product.cashier_stock[user.id] || 0) > 0
   );
 
-  const handleStockReturn = () => {
-    // Refresh products after successful return
-    fetchProducts();
+  const handleStockReturn = async () => {
+    await fetchProducts();
+    toast({
+      title: "Stok Diperbarui",
+      description: "Data stok telah diperbarui"
+    });
   };
 
   return (
@@ -51,10 +58,19 @@ export function CashierStockView() {
                 {product.cashier_stock[user.id] || 0}
               </TableCell>
               <TableCell className="text-right">
-                <StockReturnButton
-                  product={product}
-                  onSuccess={handleStockReturn}
-                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedProduct({
+                      ...product,
+                      current_stock: product.cashier_stock[user.id] || 0
+                    });
+                    setIsReturnOpen(true);
+                  }}
+                >
+                  Return
+                </Button>
               </TableCell>
             </TableRow>
           ))}
@@ -67,6 +83,20 @@ export function CashierStockView() {
           )}
         </TableBody>
       </Table>
+
+      {/* Return Dialog */}
+      {selectedProduct && (
+        <ReturnDialog
+          isOpen={isReturnOpen}
+          onClose={() => {
+            setIsReturnOpen(false);
+            setSelectedProduct(null);
+          }}
+          product={selectedProduct}
+          cashierId={user.id}
+          onSuccess={handleStockReturn}
+        />
+      )}
     </div>
   );
 }
