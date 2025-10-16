@@ -39,18 +39,23 @@ export async function completeSale({
       cashierId
     });
 
-    // Convert cart items to sale items format
+    // Convert cart items to the format expected by process_sale
     const saleItems = cart.map(item => ({
       product_id: item.product.id,
       quantity: item.quantity,
-      price_at_time: item.product.price
+      price: item.product.price
     }));
 
-    // Format sales taxes
-    const formattedTaxes = salesTaxes.map(tax => ({
-      tax_id: tax.id,
-      amount: tax.amount
-    }));
+    // Call process_sale function directly
+    const { data, error } = await supabase.rpc('process_sale', {
+      _items: cart.map(item => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        price: item.product.price
+      })),
+      _payment_method: paymentMethod,
+      _cashier_id: cashierId
+    });
 
     // Call the stored procedure
     const { data, error } = await supabase
@@ -96,6 +101,38 @@ export async function verifyStockAvailability(
   cart: Cart,
   cashierId: string
 ): Promise<{ available: boolean; insufficientItems?: Array<{ productId: string, available: number, requested: number }> }> {
+  try {
+    const insufficientItems: Array<{ productId: string, available: number, requested: number }> = [];
+    
+    // Check each cart item against cashier's stock
+    for (const item of cart) {
+      const { data: stockData, error: stockError } = await supabase
+        .from('cashier_stock')
+        .select('stock')
+        .eq('cashier_id', cashierId)
+        .eq('product_id', item.product.id)
+        .single();
+        
+      if (stockError) throw stockError;
+      
+      const availableStock = stockData?.stock || 0;
+      if (availableStock < item.quantity) {
+        insufficientItems.push({
+          productId: item.product.id,
+          available: availableStock,
+          requested: item.quantity
+        });
+      }
+    }
+    
+    return {
+      available: insufficientItems.length === 0,
+      insufficientItems: insufficientItems.length > 0 ? insufficientItems : undefined
+    };
+  } catch (error) {
+    console.error('Error verifying stock availability:', error);
+    throw error;
+  }
   try {
     // Get current stock levels for all products in cart
     const { data: stockLevels, error } = await supabase

@@ -29,25 +29,12 @@ async function generateSKU(categoryCode: string): Promise<string> {
  */
 export async function addProduct(input: CreateProductInput) {
   try {
-    // Get category code first
-    const { data: category } = await supabase
-      .from('categories')
-      .select('code')
-      .eq('id', input.category_id)
-      .single()
-
-    if (!category) {
-      throw new Error('Kategori tidak ditemukan')
-    }
-
-    // Generate SKU
-    const sku = await generateSKU(category.code)
-
-    // Insert product
+    // Insert product with null SKU to trigger automatic generation
     const { data, error } = await supabase
       .from('products')
       .insert({
         ...input,
+        sku: null, // This will trigger the automatic SKU generation
         sku,
         category_code: category.code,
         stock: input.storage_stock, // Initial total stock equals storage stock

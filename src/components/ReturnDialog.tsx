@@ -100,6 +100,34 @@ export const ReturnDialog = ({
 
     setIsLoading(true);
     try {
+      const result = await returnCashierStock(product.id, cashierId, returnQuantity, reason);
+      
+      if (result.success) {
+        toast({
+          title: 'Berhasil',
+          description: `${returnQuantity} unit produk berhasil dikembalikan ke gudang`,
+        });
+        onSuccess();
+        onClose();
+      } else {
+        toast({
+          title: 'Gagal',
+          description: result.error || 'Gagal mengembalikan stok',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Terjadi kesalahan saat mengembalikan stok',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+
+    setIsLoading(true);
+    try {
       console.log('Sending return request:', {
         productId: product.id,
         cashierId,

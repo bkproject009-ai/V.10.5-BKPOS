@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, History, AlertTriangle } from 'lucide-react';
+import { Send, History, AlertTriangle, Package } from 'lucide-react';
 import { DistributeDialog } from '@/components/admin/DistributeDialog';
 import { useToast } from '@/hooks/use-toast';
 

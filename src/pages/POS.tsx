@@ -336,6 +336,18 @@ const POS = () => {
 
           try {
             const { subtotal, taxes, total } = calculateTotals()
+            
+            // Verify stock before proceeding
+            const stockCheck = await verifyStockAvailability(state.cart, state.user.id)
+            if (!stockCheck.available) {
+              toast({
+                title: "Stok Tidak Mencukupi",
+                description: "Beberapa item tidak memiliki stok yang cukup",
+                variant: "destructive"
+              })
+              return
+            }
+
             const result = await completeSale({
               paymentMethod,
               status: 'completed',

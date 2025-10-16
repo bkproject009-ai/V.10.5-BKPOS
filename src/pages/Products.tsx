@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ProductForm } from '@/components/admin/ProductForm';
 import { CategoryForm } from '@/components/admin/CategoryForm';
+import { CategoryTable } from '@/components/admin/CategoryTable';
 import { ReturnDialog } from '@/components/ReturnDialog';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
@@ -173,6 +174,12 @@ const Products = () => {
               </>
             )}
           </TabsList>
+
+          {isAdmin && (
+            <TabsContent value="categories">
+              <CategoryTable />
+            </TabsContent>
+          )}
 
           <TabsContent value="products" className="space-y-4">
             {/* Return Dialog */}

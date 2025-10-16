@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { toast } from '@/hooks/use-toast';
 import * as db from '@/lib/db';
 import {
@@ -6,11 +6,12 @@ import {
   calculateTaxAmount,
   calculateTotal
 } from '@/lib/calculations';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { returnCashierStock } from '@/lib/returnStock';
 import * as stockManagement from '@/lib/stockManagement';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase';
-import { completeSale, verifyStockAvailability } from '@/lib/completeSale';
+import { processSale } from '@/lib/processSale';
 
 export interface CashierStock {
   cashier_id: string;
@@ -62,7 +63,19 @@ export interface StockReturn {
 }
 
 export interface CartItem {
-  product: Product;
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    storage_stock: number;
+    category_id: string;
+    category_code: string;
+    sku: string;
+    description?: string;
+    image?: string;
+    cashier_stock: Record<string, number>;
+    total_stock?: number;
+  };
   quantity: number;
 }
 
@@ -121,14 +134,20 @@ export interface TaxSettings {
   taxTypes: TaxType[];
 }
 
-interface POSState {
+export interface POSState {
   products: Product[];
   cart: CartItem[];
-  sales: Sale[];
-  cashiers: Cashier[];
-  taxSettings: TaxSettings;
-  isLoading: boolean;
-  error: string | null;
+  distributions: StockDistribution[];
+  selectedDistribution: StockDistribution | null;
+  stockReturns: StockReturn[];
+  taxTypes: TaxType[];
+  cashierStocks: CashierStock[];
+  lastSaleId: string | null;
+  subscriptions: {
+    stock?: RealtimeChannel;
+    distributions?: RealtimeChannel;
+    sales?: RealtimeChannel;
+  };
 }
 
 interface POSContextType {
@@ -157,6 +176,7 @@ interface POSContextType {
   }>;
   returnCashierStock: (
     productId: string,
+    cashierId: string,
     quantity: number,
     reason: string
   ) => Promise<{
@@ -378,6 +398,22 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
   }
 };
 
+interface UpdateProductStorageResult {
+  success: boolean;
+  previous_stock: number;
+  new_stock: number;
+  change: number;
+  product: Product;
+}
+
+interface ReturnCashierStockResult {
+  success: boolean;
+  previous_stock?: number;
+  new_stock?: number;
+  returned_quantity?: number;
+  error?: string;
+}
+
 interface POSContextType {
   state: POSState;
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
@@ -391,17 +427,10 @@ interface POSContextType {
   completeSale: (sale: Sale) => Promise<void>;
   calculateTotals: () => { subtotal: number; taxes: SaleTax[]; total: number };
   distributeStock: (productId: string, cashierId: string, quantity: number) => Promise<void>;
-  returnStock: (
-    productId: string,
-    quantity: number,
-    reason: string
-  ) => Promise<{
-    success: boolean;
-    previous_stock?: number;
-    new_stock?: number;
-    returned_quantity?: number;
-    error?: string;
-  }>;
+  updateSale: (id: string, sale: Partial<Sale>) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
+  updateProductStorage: (productId: string, quantity: number, reason: string) => Promise<UpdateProductStorageResult>;
+  returnCashierStock: (productId: string, cashierId: string, quantity: number, reason: string) => Promise<ReturnCashierStockResult>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -502,8 +531,21 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeFromCart = (productId: string) => {
-    console.log('Removing product from cart:', productId);
-    dispatch({ type: 'REMOVE_FROM_CART', productId });
+    try {
+      console.log('Removing product from cart:', productId);
+      dispatch({ type: 'REMOVE_FROM_CART', productId });
+      toast({
+        title: "Produk Dihapus",
+        description: "Produk berhasil dihapus dari keranjang"
+      });
+    } catch (error) {
+      console.error('Error removing product from cart:', error);
+      toast({
+        title: "Gagal Menghapus Produk",
+        description: "Terjadi kesalahan saat menghapus produk dari keranjang",
+        variant: "destructive"
+      });
+    }
   };
 
   const clearCart = () => {
@@ -527,60 +569,134 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     return { subtotal, taxes, total };
   };
 
-  const completeSale = async (paymentMethod: 'cash' | 'qris') => {
+  const completeSale = async (sale: Sale) => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user, error: userError } = await supabase.auth.getUser();
+      if (userError) throw new Error(userError.message);
       if (!user.user) throw new Error('No authenticated user');
 
-      const { subtotal, taxes, total } = calculateTotals();
-      
-      // Check stock availability first
-      const stockCheck = await verifyStockAvailability(state.cart, user.user.id);
-      if (!stockCheck.available) {
-        const items = stockCheck.insufficientItems?.map(
-          item => `${state.products.find(p => p.id === item.productId)?.name} (tersedia: ${item.available}, diminta: ${item.requested})`
-        ).join('\n');
-        
-        toast({
-          title: "Stok Tidak Mencukupi",
-          description: `Beberapa item memiliki stok yang tidak mencukupi:\n${items}`,
-          variant: "destructive"
-        });
-        return;
+      if (state.cart.length === 0) {
+        throw new Error('Keranjang kosong');
       }
 
-      // Create payment details
-      const paymentDetails = {
-        method: paymentMethod,
-        amount: total,
-        timestamp: new Date().toISOString()
-      };
+      // Calculate totals
+      const { subtotal, taxes, total } = calculateTotals();
 
-      // Call completeSale function with transaction handling
-      const result = await completeSale({
-        paymentMethod,
-        status: 'completed',
-        total,
-        subtotal,
-        taxAmount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
-        cashierId: user.user.id,
-        paymentDetails,
-        cart: state.cart,
-        salesTaxes: taxes
+      // Verify stock availability for all items
+      for (const item of state.cart) {
+        const cashierStock = item.product.cashier_stock[user.user.id] || 0;
+        if (cashierStock < item.quantity) {
+          throw new Error(`Stok untuk ${item.product.name} tidak cukup. Tersedia: ${cashierStock}, Diminta: ${item.quantity}`);
+        }
+      }
+
+      // Process sale and stock reduction
+      const { data: newSaleId, error: processError } = await supabase.rpc('process_sale', {
+        _items: state.cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price
+        })),
+        _payment_method: sale.payment_method,
+        _cashier_id: user.user.id
       });
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to complete sale');
+      if (processError || !newSaleId) {
+        throw new Error(processError?.message || 'Gagal memproses transaksi');
       }
 
-      // Refresh products and clear cart
-      const products = await db.fetchProducts();
-      dispatch({ type: 'SET_PRODUCTS', products });
+      // Update sale details
+      const { error: completeError } = await supabase
+        .from('sales')
+        .update({
+          subtotal,
+          tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
+          total,
+          payment_method: sale.payment_method,
+          payment_details: {
+            method: sale.payment_method,
+            amount: total,
+            timestamp: new Date().toISOString()
+          },
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', newSaleId);
+
+      if (completeError) {
+        throw new Error(completeError.message);
+      }
+
+      // Clear cart and refresh products
       dispatch({ type: 'CLEAR_CART' });
+      const newProducts = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products: newProducts });
 
       toast({
         title: "Transaksi Berhasil",
-        description: `Transaksi #${result.saleId} berhasil disimpan`
+        description: `Transaksi #${newSaleId} berhasil disimpan`
+      });
+
+      toast({
+        title: "Transaksi Berhasil",
+        description: `Transaksi berhasil disimpan`
+      });
+      
+      // Verify stock availability
+      for (const item of state.cart) {
+        const cashierStock = item.product.cashier_stock[user.user.id] || 0;
+        if (cashierStock < item.quantity) {
+          toast({
+            title: "Stok Tidak Mencukupi",
+            description: `Stok untuk ${item.product.name} tidak cukup. Tersedia: ${cashierStock}, Diminta: ${item.quantity}`,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      // Create sale record and reduce stock
+      const { data: processedSaleId, error: saleError } = await supabase.rpc('process_sale', {
+        _items: state.cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price
+        })),
+        _payment_method: sale.payment_method,
+        _cashier_id: user.user.id
+      });
+
+      if (saleError || !processedSaleId) {
+        throw new Error(saleError?.message || 'Failed to process sale');
+      }
+
+      // Update the sale with additional details
+      const { error: updateError } = await supabase
+        .from('sales')
+        .update({
+          subtotal,
+          tax_amount: taxes.reduce((sum, tax) => sum + tax.taxAmount, 0),
+          total,
+          payment_method: sale.payment_method,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          payment_details: {
+            method: sale.payment_method,
+            amount: total,
+            timestamp: new Date().toISOString()
+          }
+        })
+        .eq('id', processedSaleId);
+
+      // Clear cart and refresh stock
+      dispatch({ type: 'CLEAR_CART' });
+      const updatedProducts = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products: updatedProducts });
+
+      // Show success message
+      toast({
+        title: "Transaksi Berhasil",
+        description: `Transaksi #${processedSaleId} berhasil disimpan`
       });
     } catch (error) {
       console.error('Error completing sale:', error);
@@ -725,7 +841,10 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
       return result;
     },
     updateProduct,
-    refreshProducts,
+    fetchProducts: async () => {
+      const products = await db.fetchProducts();
+      dispatch({ type: 'SET_PRODUCTS', products });
+    },
     deleteProduct,
     addToCart,
     updateCartItem,
@@ -736,7 +855,8 @@ export const POSProvider = ({ children }: { children: ReactNode }) => {
     deleteSale,
     calculateTotals,
     updateProductStorage,
-    distributeStock
+    distributeStock,
+    returnCashierStock
   };
 
   return (

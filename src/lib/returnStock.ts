@@ -15,35 +15,50 @@ export const returnCashierStock = async (
   reason: string
 ): Promise<ReturnResult> => {
   try {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) {
-      throw new Error('User not authenticated');
+    // Begin transaction
+    const { data: currentStock, error: stockError } = await supabase
+      .from('cashier_stock')
+      .select('stock')
+      .eq('product_id', productId)
+      .eq('cashier_id', cashierId)
+      .single();
+
+    if (stockError) throw stockError;
+
+    const currentStockQty = currentStock?.stock || 0;
+    if (currentStockQty < quantity) {
+      throw new Error(`Stok tidak mencukupi. Tersedia: ${currentStockQty}, Diminta: ${quantity}`);
     }
 
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(productId) || !uuidRegex.test(cashierId) || !uuidRegex.test(user.user.id)) {
-      throw new Error('Invalid UUID format');
-    }
+    // Update cashier stock
+    const { error: updateError } = await supabase
+      .from('cashier_stock')
+      .update({
+        stock: currentStockQty - quantity,
+        updated_at: new Date().toISOString()
+      })
+      .eq('product_id', productId)
+      .eq('cashier_id', cashierId);
 
-    // Validate quantity
-    if (quantity <= 0) {
-      throw new Error('Quantity must be greater than 0');
-    }
+    if (updateError) throw updateError;
 
-    // Validate reason
-    if (!reason || !['Sisa Produk', 'Reject/Rusak', 'Kadaluarsa'].includes(reason)) {
-      throw new Error('Invalid reason');
-    }
+    // Update storage stock
+    const { data: storage, error: storageError } = await supabase
+      .from('products')
+      .select('storage_stock')
+      .eq('id', productId)
+      .single();
 
-    const { data, error } = await supabase
-      .rpc('return_cashier_stock', {
-        _product_id: productId,
-        _cashier_id: cashierId,
-        _quantity: quantity,
-        _reason: reason,
-        _user_id: user.user.id
-      });
+    if (storageError) throw storageError;
+
+    const { error: updateStorageError } = await supabase
+      .from('products')
+      .update({
+        storage_stock: (storage?.storage_stock || 0) + quantity
+      })
+      .eq('id', productId);
+
+    if (updateStorageError) throw updateStorageError;
 
     if (error) {
       console.error('Supabase RPC Error:', error);

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -22,11 +22,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { toast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase'
+import { isUserAdmin } from '@/lib/authUtils'
 
 // Form validation schema
 const categorySchema = z.object({
-  code: z.string().min(2, 'Kode minimal 2 karakter').max(50, 'Kode maksimal 50 karakter')
-    .regex(/^[A-Z0-9]+$/, 'Kode harus huruf kapital dan angka'),
+  code: z.string()
+    .min(2, 'Kode minimal 2 karakter')
+    .max(4, 'Kode maksimal 4 karakter')
+    .regex(/^[A-Z0-9]+$/, 'Kode harus huruf kapital dan angka')
+    .transform(val => val.toUpperCase()),
   name: z.string().min(1, 'Nama kategori wajib diisi'),
   description: z.string().optional()
 })
@@ -46,6 +50,7 @@ interface CategoryFormProps {
 
 export function CategoryForm({ open, onOpenChange, editData, onSuccess }: CategoryFormProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [adminChecked, setAdminChecked] = useState(false)
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categorySchema),
@@ -56,9 +61,70 @@ export function CategoryForm({ open, onOpenChange, editData, onSuccess }: Catego
     }
   })
 
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { isAdmin, error } = await isUserAdmin();
+      
+      console.log('Admin check result:', { isAdmin, error });
+      
+      if (!isAdmin) {
+        toast({
+          title: "Error",
+          description: error || "Anda tidak memiliki akses admin",
+          variant: "destructive"
+        });
+        onOpenChange(false);
+      }
+      setAdminChecked(true);
+    };
+
+    if (open && !adminChecked) {
+      checkAdmin();
+    }
+  }, [open, adminChecked, onOpenChange]);
+
   async function onSubmit(values: CategoryFormValues) {
     try {
       setIsLoading(true)
+
+      // Verify admin role first
+      const { isAdmin, error: adminError } = await isUserAdmin();
+      if (!isAdmin) {
+        toast({
+          title: "Error",
+          description: adminError || "Hanya admin yang dapat menambah atau mengubah kategori",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Check if code already exists for new category
+      if (!editData) {
+        const { data: existingCategory, error: checkError } = await supabase
+          .from('categories')
+          .select('code')
+          .eq('code', values.code)
+          .single()
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.error('Error checking category:', checkError);
+          toast({
+            title: 'Error',
+            description: 'Gagal memeriksa kode kategori',
+            variant: 'destructive'
+          })
+          return
+        }
+
+        if (existingCategory) {
+          toast({
+            title: 'Error',
+            description: `Kode kategori ${values.code} sudah digunakan`,
+            variant: 'destructive'
+          })
+          return
+        }
+      }
 
       const { error } = editData
         ? await supabase
@@ -76,20 +142,28 @@ export function CategoryForm({ open, onOpenChange, editData, onSuccess }: Catego
               description: values.description
             })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error saving category:', error);
+        toast({
+          title: 'Error',
+          description: `Gagal menyimpan kategori: ${error.message}`,
+          variant: 'destructive'
+        })
+        return
+      }
 
       toast({
-        title: 'Sukses',
-        description: `Kategori berhasil ${editData ? 'diperbarui' : 'ditambahkan'}`
+        title: 'Success',
+        description: `Kategori berhasil ${editData ? 'diupdate' : 'ditambahkan'}`
       })
 
-      onOpenChange(false)
-      form.reset()
       onSuccess?.()
-    } catch (error: any) {
+      onOpenChange(false)
+    } catch (error) {
+      console.error('Error in onSubmit:', error)
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'Terjadi kesalahan saat menyimpan kategori',
         variant: 'destructive'
       })
     } finally {
@@ -101,14 +175,12 @@ export function CategoryForm({ open, onOpenChange, editData, onSuccess }: Catego
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {editData ? 'Edit Kategori' : 'Tambah Kategori Baru'}
-          </DialogTitle>
-          {!editData && (
-            <DialogDescription>
-              Kode kategori akan digunakan untuk generate SKU produk secara otomatis
-            </DialogDescription>
-          )}
+          <DialogTitle>{editData ? 'Edit' : 'Tambah'} Kategori</DialogTitle>
+          <DialogDescription>
+            {editData
+              ? 'Edit detail kategori yang sudah ada.'
+              : 'Tambahkan kategori baru untuk produk.'}
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -118,12 +190,12 @@ export function CategoryForm({ open, onOpenChange, editData, onSuccess }: Catego
               name="code"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Kode Kategori</FormLabel>
+                  <FormLabel>Kode</FormLabel>
                   <FormControl>
                     <Input
+                      placeholder="Masukkan kode kategori"
                       {...field}
-                      disabled={!!editData}
-                      placeholder="Contoh: FNB, ELC, FSH"
+                      disabled={!!editData || isLoading}
                     />
                   </FormControl>
                   <FormMessage />
@@ -136,9 +208,13 @@ export function CategoryForm({ open, onOpenChange, editData, onSuccess }: Catego
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nama Kategori</FormLabel>
+                  <FormLabel>Nama</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input
+                      placeholder="Masukkan nama kategori"
+                      {...field}
+                      disabled={isLoading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -152,26 +228,20 @@ export function CategoryForm({ open, onOpenChange, editData, onSuccess }: Catego
                 <FormItem>
                   <FormLabel>Deskripsi</FormLabel>
                   <FormControl>
-                    <Textarea {...field} />
+                    <Textarea
+                      placeholder="Masukkan deskripsi kategori (opsional)"
+                      {...field}
+                      disabled={isLoading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Batal
-              </Button>
-              <Button
-                type="submit"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Menyimpan...' : 'Simpan'}
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? 'Menyimpan...' : editData ? 'Update' : 'Simpan'}
               </Button>
             </div>
           </form>
